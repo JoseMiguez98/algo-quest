@@ -190,3 +190,23 @@ a:hover { color: var(--color-accent); }
 .code { font-size: 17px; }
 .picker__label { color: var(--color-muted); }
 .theme-select { font-family: var(--font-display); font-size: 9px; padding: 9px 8px; background: var(--color-bg); color: var(--color-text); border: 0; box-shadow: inset 0 0 0 2px var(--color-border); }
+
+/* Home */
+.home-bar__brand { font-family: var(--font-display); font-size: 12px; color: var(--color-muted); }
+.logo { font-family: var(--font-display); font-size: clamp(34px, 6vw, 72px); line-height: 1.15; font-weight: normal; color: var(--color-text); text-shadow: 5px 5px 0 var(--color-window); }
+.logo__word + .logo__word { margin-left: .6em; }
+.hero__tagline { font-family: var(--font-display); font-size: 11px; line-height: 1.8; color: var(--color-accent); }
+.hero__hint { color: var(--color-muted); font-size: 15px; }
+.demo { border: 12px solid transparent; border-image: var(--frame-dark) 4 fill / 12px / 0 stretch; padding: 6px; }
+.demo__badge { font-family: var(--font-display); font-size: 9px; color: var(--color-accent); }
+.demo__caption { font-family: var(--font-display); font-size: 10px; color: var(--color-muted); }
+.search { font-size: 17px; padding: 10px 12px; color: var(--color-text); background: var(--color-bg); border: 0; box-shadow: inset 0 0 0 2px var(--color-border); }
+.world__title { font-family: var(--font-display); font-size: 13px; font-weight: normal; line-height: 1.6; }
+.world__num { color: var(--color-accent); font-size: 10px; }
+.cart { border: 12px solid transparent; border-image: var(--frame-dark) 4 fill / 12px / 0 stretch; padding: 6px; }
+.cart__level { font-family: var(--font-display); font-size: 9px; color: var(--color-accent); margin-bottom: 6px; }
+.cart__screen { margin-bottom: 10px; }
+.cart__name { font-family: var(--font-display); font-size: 11px; line-height: 1.5; }
+.cart__tagline { color: var(--color-muted); font-size: 15px; }
+.cart:hover .cart__name, .cart:focus-visible .cart__name { color: var(--color-accent); }
+.home-footer { color: var(--color-muted); font-size: 15px; }

@@ -71,7 +71,7 @@ export class PixelRenderer implements StageRenderer {
     t.imageSmoothingEnabled = false;
     const fit = Math.min(target.width / this.w, target.height / this.h);
     // Integer scaling keeps pixels even; at ≥3× device pixels half-steps are imperceptible and avoid big letterboxes.
-    const scale = fit >= 3 ? Math.floor(fit * 2) / 2 : Math.max(1, Math.floor(fit));
+    const scale = fit >= 3 ? Math.floor(fit * 2) / 2 : fit >= 1 ? Math.floor(fit) : fit;
     const dw = Math.round(this.w * scale);
     const dh = Math.round(this.h * scale);
     t.fillStyle = this.c('stage');
