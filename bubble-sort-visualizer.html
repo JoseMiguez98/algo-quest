@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bubble Sort Arcade</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<style>
+  html,body{margin:0;height:100%;background:#0b0b1a;overflow:hidden}
+  canvas#screen{
+    position:fixed;left:0;top:0;width:100vw;height:100vh;display:block;
+    image-rendering:pixelated;image-rendering:crisp-edges;
+    touch-action:none;-webkit-user-select:none;user-select:none;outline:none
+  }
+</style>
+</head>
+<body>
+<canvas id="screen" tabindex="0"></canvas>
+<script>
+(() => {
+'use strict';
+
+/* =====================================================================
+   BUBBLE SORT // 16-BIT LESSON
+   Layers:  Algorithm (generator) -> Events -> Animation/Controller
+            -> Rendering (read-only) and Audio (read-only)
+   ===================================================================== */
+
+const W = 128, H = 96;
+
+/* ------------------------------------------------------------------ */
+/* PALETTE (24 colors)                                                */
+/* ------------------------------------------------------------------ */
+const HEX = [
+  '#0b0b1a','#1a1c2c','#333c57','#566c86','#94b0c2','#f4f4f4',
+  '#b13e53','#ef7d57','#ffcd75','#a7f070','#38b764','#257179',
+  '#29366f','#3b5dc9','#41a6f6','#73eff7','#5d275d','#f04f78',
+  '#e8b7ff','#ff9ec4','#1e5a3a','#7a4a2b','#2a2a44','#8e2a3a'
+];
+const C = { BG:0, PAN:1, PANL:2, SLATE:3, LSLATE:4, WHITE:5, RED:6, ORANGE:7, YEL:8, LIME:9,
+            GREEN:10, TEAL:11, NAVY:12, BLUE:13, SKY:14, CYAN:15, PURPLE:16, PINK:17,
+            LAV:18, LPINK:19, DGREEN:20, BROWN:21, DEEP:22, DRED:23 };
+const PAL = new Uint32Array(HEX.length);
+for (let i = 0; i < HEX.length; i++) {
+  const r = parseInt(HEX[i].substr(1, 2), 16), g = parseInt(HEX[i].substr(3, 2), 16), b = parseInt(HEX[i].substr(5, 2), 16);
+  PAL[i] = ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* SOFTWARE FRAMEBUFFER (128x96, integer pixels only)                  */
+/* ------------------------------------------------------------------ */
+const img = new ImageData(W, H);
+const px32 = new Uint32Array(img.data.buffer);
+
+function pset(x, y, c) { if (x < 0 || y < 0 || x >= W || y >= H) return; px32[y * W + x] = PAL[c]; }
+function rect(x, y, w, h, c) {
+  const x0 = x < 0 ? 0 : x, y0 = y < 0 ? 0 : y, x1 = x + w > W ? W : x + w, y1 = y + h > H ? H : y + h;
+  const col = PAL[c];
+  for (let yy = y0; yy < y1; yy++) { const o = yy * W; for (let xx = x0; xx < x1; xx++) px32[o + xx] = col; }
+}
+function hline(x, y, w, c) { rect(x, y, w, 1, c); }
+function vline(x, y, h, c) { rect(x, y, 1, h, c); }
+
+/* ------------------------------------------------------------------ */
+/* 3x5 PIXEL FONT                                                      */
+/* ------------------------------------------------------------------ */
+const GSRC = {
+  'A':'010101111101101','B':'110101110101110','C':'011100100100011','D':'110101101101110',
+  'E':'111100110100111','F':'111100110100100','G':'011100101101011','H':'101101111101101',
+  'I':'111010010010111','J':'001001001101010','K':'101101110101101','L':'100100100100111',
+  'M':'101111111101101','N':'110101101101101','O':'010101101101010','P':'110101110100100',
+  'Q':'010101101110011','R':'110101110101101','S':'011100010001110','T':'111010010010010',
+  'U':'101101101101111','V':'101101101101010','W':'101101111111101','X':'101101010101101',
+  'Y':'101101010010010','Z':'111001010100111',
+  '0':'111101101101111','1':'010110010010111','2':'110001010100111','3':'110001010001110',
+  '4':'101101111001001','5':'111100110001110','6':'011100111101111','7':'111001010010010',
+  '8':'111101111101111','9':'111101111001110',
+  '.':'000000000000010',',':'000000000010100',':':'000010000010000','-':'000000111000000',
+  '+':'000010111010000','/':'001001010100100','(':'010100100100010',')':'010001001001010',
+  '[':'110100100100110',']':'011001001001011','<':'001010100010001','>':'100010001010100',
+  '=':'000111000111000','?':'110001010000010','!':'010010010000010','|':'010010010010010',
+  '^':'010101000000000','_':'000000000000111','*':'000101010101000',
+  '\x01':'010001111001010',  /* right arrow */
+  '\x02':'000001101010000'   /* check mark  */
+};
+const GL = new Uint16Array(256);
+for (const k in GSRC) GL[k.charCodeAt(0)] = parseInt(GSRC[k], 2);
+const ARW = '\x01', CHK = '\x02';
+
+function drawChar(x, y, code, col) {
+  const g = GL[code]; if (!g) return;
+  for (let r = 0; r < 5; r++) for (let c = 0; c < 3; c++) if (g & (1 << (14 - r * 3 - c))) pset(x + c, y + r, col);
+}
+function drawText(s, x, y, col) { for (let i = 0; i < s.length; i++) { drawChar(x, y, s.charCodeAt(i), col); x += 4; } return x; }
+function textW(s) { return s.length * 4 - 1; }
+function drawTextC(s, cx, y, col) { drawText(s, cx - ((textW(s) / 2) | 0), y, col); }
+function numW(n) { return (n >= 100 ? 3 : n >= 10 ? 2 : 1) * 4 - 1; }
+function drawNum(n, x, y, col) {
+  n = n | 0; const d = n >= 100 ? 3 : n >= 10 ? 2 : 1; let p = d === 3 ? 100 : d === 2 ? 10 : 1;
+  for (let i = 0; i < d; i++) { drawChar(x, y, 48 + (((n / p) | 0) % 10), col); x += 4; p = (p / 10) | 0; }
+  return x;
+}
+function drawNumC(n, cx, y, col) { drawNum(n, cx - ((numW(n) / 2) | 0), y, col); }
+
+/* ------------------------------------------------------------------ */
+/* CONSTANTS / LAYOUT                                                  */
+/* ------------------------------------------------------------------ */
+const N = 12;                  /* array length */
+const PRESET = [7, 3, 9, 2, 10, 1, 6, 3, 8, 4, 9, 5];   /* duplicates: 3, 9 */
+const P = 9, BW = 7;           /* bar pitch / width */
+const X0 = ((W - (N * P - (P - BW))) / 2) | 0;
+const YB = 70;                 /* floor line */
+const SC = 3;                  /* px per value unit */
+const barX = k => X0 + k * P;
+
+/* ------------------------------------------------------------------ */
+/* SEEDED PRNG + DATASETS                                              */
+/* ------------------------------------------------------------------ */
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function makeDataset(seed, out) {
+  if (seed === 0) { for (let i = 0; i < N; i++) out[i] = PRESET[i]; return; }
+  const rng = mulberry32(seed * 7919 + 13);
+  for (let attempt = 0; attempt < 64; attempt++) {
+    let mn = 99, mx = 0, sorted = true;
+    for (let i = 0; i < N; i++) { out[i] = 1 + Math.floor(rng() * 10); if (out[i] < mn) mn = out[i]; if (out[i] > mx) mx = out[i]; if (i && out[i - 1] > out[i]) sorted = false; }
+    if (!sorted && mn <= 3 && mx >= 8) return;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* ALGORITHM LAYER  (single source of truth)                           */
+/* ------------------------------------------------------------------ */
+const A = new Int16Array(N);      /* the array being sorted */
+const INIT = new Int16Array(N);   /* initial dataset snapshot */
+let seed = 0;
+
+const ALG = {
+  i: 0, j: -1, swapped: false, passNo: 0, passCmp: 0, passCmpTotal: 0, activeEnd: N - 1,
+  sortedStart: N, sortedBefore: N, cmpCount: 0, swapCount: 0, passesDone: 0, earlyExit: false, done: false
+};
+
+/* ------------------------------------------------------------------ */
+/* EVENT LAYER                                                         */
+/* ------------------------------------------------------------------ */
+const EVT = { SORT_START: 1, PASS_START: 2, COMPARE: 3, COMPARISON_RESULT: 4, SWAP_START: 5, SWAP_PROGRESS: 6,
+              SWAP_COMPLETE: 7, NO_SWAP: 8, PASS_COMPLETE: 9, ELEMENT_LOCKED: 10, EARLY_TERMINATION: 11,
+              SORT_COMPLETE: 12, RESET: 13 };
+function makeEv() {
+  return { type: 0, seq: 0, passIndex: 0, comparisonIndex: -1, leftIndex: -1, rightIndex: -1, leftValue: 0, rightValue: 0,
+           didSwap: false, activeEnd: 0, swapCount: 0, comparisonCount: 0, passComparison: 0, passComparisons: 0,
+           swapped: false, lockedIndex: -1, lockedValue: 0, sortedBefore: N, autoNext: 0 };
+}
+const EV = makeEv();     /* reused by the algorithm layer */
+const cur = makeEv();    /* copy owned by the animation layer */
+let evSeq = 0, evHash = 2166136261 >>> 0;
+function mix(v) { evHash ^= (v & 0xffff); evHash = Math.imul(evHash, 16777619) >>> 0; }
+
+function emit(type, didSwap) {
+  EV.type = type;
+  EV.passIndex = ALG.i;
+  EV.comparisonIndex = ALG.j;
+  const pair = (type >= EVT.COMPARE && type <= EVT.NO_SWAP) && ALG.j >= 0;
+  EV.leftIndex = pair ? ALG.j : -1;
+  EV.rightIndex = pair ? ALG.j + 1 : -1;
+  EV.leftValue = pair ? A[ALG.j] : 0;
+  EV.rightValue = pair ? A[ALG.j + 1] : 0;
+  EV.didSwap = !!didSwap;
+  EV.activeEnd = ALG.activeEnd;
+  EV.swapCount = ALG.swapCount;
+  EV.comparisonCount = ALG.cmpCount;
+  EV.passComparison = ALG.passCmp;
+  EV.passComparisons = ALG.passCmpTotal;
+  EV.swapped = ALG.swapped;
+  EV.lockedIndex = type === EVT.ELEMENT_LOCKED ? ALG.sortedStart : -1;
+  EV.lockedValue = type === EVT.ELEMENT_LOCKED ? A[ALG.sortedStart] : 0;
+  EV.sortedBefore = ALG.sortedBefore;
+  if (type !== EVT.RESET) {
+    EV.seq = ++evSeq;
+    mix(type); mix(EV.passIndex); mix(EV.leftIndex + 1); mix(EV.rightIndex + 1);
+    mix(EV.leftValue); mix(EV.rightValue); mix(EV.didSwap ? 1 : 0); mix(EV.lockedIndex + 1);
+  } else EV.seq = 0;
+  return EV;
+}
+function copyEv(d, s) { for (const k in s) d[k] = s[k]; }
+
+/* Real Bubble Sort. Every yield is an event describing actual state. */
+function* bubbleSortGen() {
+  const n = N;
+  yield emit(EVT.SORT_START);
+  for (let i = 0; i < n - 1; i++) {
+    let swapped = false;
+    ALG.i = i; ALG.passNo = i + 1; ALG.activeEnd = n - 1 - i;
+    ALG.passCmp = 0; ALG.passCmpTotal = n - 1 - i; ALG.j = -1; ALG.swapped = false;
+    yield emit(EVT.PASS_START);
+    for (let j = 0; j < n - 1 - i; j++) {
+      ALG.j = j; ALG.cmpCount++; ALG.passCmp++;
+      yield emit(EVT.COMPARE);
+      const out = A[j] > A[j + 1];
+      yield emit(EVT.COMPARISON_RESULT, out);
+      if (out) {
+        yield emit(EVT.SWAP_START, true);                     /* animation plays with array untouched */
+        const t = A[j]; A[j] = A[j + 1]; A[j + 1] = t;        /* the REAL swap */
+        swapped = true; ALG.swapped = true; ALG.swapCount++;
+        yield emit(EVT.SWAP_COMPLETE, true);
+      } else {
+        yield emit(EVT.NO_SWAP, false);
+      }
+    }
+    ALG.j = -1;
+    ALG.passesDone = i + 1;
+    yield emit(EVT.PASS_COMPLETE);
+    ALG.sortedStart = n - 1 - i;                               /* sorted suffix grows with outer index */
+    yield emit(EVT.ELEMENT_LOCKED);
+    if (!swapped) {                                            /* real early-termination test */
+      ALG.earlyExit = true;
+      yield emit(EVT.EARLY_TERMINATION);
+      break;
+    }
+  }
+  if (!ALG.earlyExit) {                                        /* last remaining element is trivially in place */
+    ALG.sortedStart = 0;
+    yield emit(EVT.ELEMENT_LOCKED);
+  }
+  ALG.sortedBefore = ALG.sortedStart;
+  ALG.sortedStart = 0;
+  ALG.done = true;
+  yield emit(EVT.SORT_COMPLETE);
+}
+
+/* ------------------------------------------------------------------ */
+/* COSMETIC FX (particles) - never touches the algorithm               */
+/* ------------------------------------------------------------------ */
+const MAXP = 96;
+const PX = new Float32Array(MAXP), PY = new Float32Array(MAXP), PVX = new Float32Array(MAXP), PVY = new Float32Array(MAXP);
+const PL = new Int16Array(MAXP), PC = new Uint8Array(MAXP);
+let pHead = 0, fx = mulberry32(0xC0FFEE);
+function spawn(x, y, vx, vy, life, c) { const i = pHead; pHead = (pHead + 1) % MAXP; PX[i] = x; PY[i] = y; PVX[i] = vx; PVY[i] = vy; PL[i] = life; PC[i] = c; }
+function burst(x, y, n, c0, c1, spread, up) {
+  for (let k = 0; k < n; k++) {
+    const a = fx() * 6.2832, s = 0.25 + fx() * spread;
+    spawn(x, y, Math.cos(a) * s, Math.sin(a) * s - up, 16 + ((fx() * 14) | 0), fx() < 0.5 ? c0 : c1);
+  }
+}
+function fxUpdate() {
+  for (let i = 0; i < MAXP; i++) if (PL[i] > 0) { PX[i] += PVX[i]; PY[i] += PVY[i]; PVY[i] += 0.05; PL[i]--; }
+}
+function fxClear() { PL.fill(0); fx = mulberry32(0xC0FFEE); }
+
+/* ------------------------------------------------------------------ */
+/* AUDIO LAYER (procedural 8-bit; created only after user gesture)     */
+/* ------------------------------------------------------------------ */
+const audio = (() => {
+  let ctx = null, master = null, noiseBuf = null, on = true, vol = 3;
+  const voices = [];
+  const NT = { C4: 261.63, G4: 392, B4: 493.88, C5: 523.25, D5: 587.33, E5: 659.25, F5: 698.46, G5: 783.99, A5: 880,
+               B5: 987.77, C6: 1046.5, D6: 1174.66, E6: 1318.51, G6: 1567.98, A6: 1760 };
+  function gainNow() { return on ? (vol / 5) * 0.32 : 0; }
+  function unlock() {
+    if (!ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+      ctx = new AC(); master = ctx.createGain(); master.gain.value = gainNow(); master.connect(ctx.destination);
+      const len = (ctx.sampleRate * 0.4) | 0; noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const d = noiseBuf.getChannelData(0); let s = 12345, v = 1;
+      for (let i = 0; i < len; i++) { if (i % 3 === 0) { s = (Math.imul(s, 1103515245) + 12345) >>> 0; v = (s >>> 16) & 1 ? 1 : -1; } d[i] = v; }
+    }
+    if (ctx.state === 'suspended') ctx.resume();
+  }
+  function track(node) { voices.push(node); node.onended = () => { const k = voices.indexOf(node); if (k >= 0) voices.splice(k, 1); try { node.disconnect(); } catch (e) {} }; }
+  function tone(type, f0, f1, delay, dur, g) {
+    if (!ctx || !on) return;
+    const t = ctx.currentTime + delay, o = ctx.createOscillator(), e = ctx.createGain();
+    o.type = type; o.frequency.setValueAtTime(f0, t); if (f1 !== f0) o.frequency.linearRampToValueAtTime(f1, t + dur);
+    e.gain.setValueAtTime(0, t); e.gain.linearRampToValueAtTime(g, t + 0.003); e.gain.setValueAtTime(g, t + dur * 0.65); e.gain.linearRampToValueAtTime(0, t + dur);
+    o.connect(e); e.connect(master); o.start(t); o.stop(t + dur + 0.02); track(o);
+  }
+  function noise(delay, dur, g, rate) {
+    if (!ctx || !on) return;
+    const t = ctx.currentTime + delay, s = ctx.createBufferSource(), e = ctx.createGain(), f = ctx.createBiquadFilter();
+    s.buffer = noiseBuf; s.playbackRate.value = rate; f.type = 'highpass'; f.frequency.value = 900;
+    e.gain.setValueAtTime(g, t); e.gain.linearRampToValueAtTime(0, t + dur);
+    s.connect(f); f.connect(e); e.connect(master); s.start(t); s.stop(t + dur + 0.02); track(s);
+  }
+  function seq(type, notes, step, dur, g) { for (let i = 0; i < notes.length; i++) tone(type, notes[i], notes[i], i * step, dur, g); }
+
+  function onEvent(e) {
+    if (!ctx || !on) return;
+    switch (e.type) {
+      case EVT.SORT_START: seq('square', [NT.C5, NT.E5, NT.G5, NT.C6], 0.07, 0.07, 0.16); break;
+      case EVT.PASS_START: tone('triangle', 440, 660, 0, 0.09, 0.2); break;
+      case EVT.COMPARE: tone('square', 480 + (e.leftValue + e.rightValue) * 30, 480 + (e.leftValue + e.rightValue) * 30, 0, 0.035, 0.12); break;
+      case EVT.COMPARISON_RESULT: tone('square', e.didSwap ? 300 : 240, e.didSwap ? 300 : 240, 0, 0.03, 0.08); break;
+      case EVT.NO_SWAP: tone('triangle', 262, 330, 0, 0.09, 0.22); break;
+      case EVT.SWAP_START: tone('square', 392, 784, 0, 0.1, 0.14); tone('square', 523, 659, 0.07, 0.09, 0.12); noise(0, 0.06, 0.12, 1.2); break;
+      case EVT.SWAP_PROGRESS: noise(0, 0.05, 0.1, 1.8); tone('square', 1200, 900, 0, 0.04, 0.07); break;
+      case EVT.SWAP_COMPLETE: noise(0, 0.014, 0.14, 0.6); tone('square', 220, 200, 0, 0.02, 0.1); break;
+      case EVT.PASS_COMPLETE: seq('square', [NT.G4, NT.B4, NT.D5, NT.G5], 0.06, 0.07, 0.14); break;
+      case EVT.ELEMENT_LOCKED: tone('triangle', NT.E6, NT.E6, 0, 0.09, 0.28); tone('triangle', NT.A6, NT.A6, 0.08, 0.14, 0.26); tone('square', NT.E6 * 2, NT.E6 * 2, 0.08, 0.03, 0.05); break;
+      case EVT.EARLY_TERMINATION:
+        seq('square', [NT.C5, NT.E5, NT.G5, NT.C6, NT.G5, NT.C6, NT.E6], 0.075, 0.08, 0.15);
+        seq('triangle', [NT.C4, NT.C4, NT.G4, NT.G4], 0.15, 0.13, 0.25); break;
+      case EVT.SORT_COMPLETE: {
+        const lead = [[NT.C5, 0, .09], [NT.E5, .1, .09], [NT.G5, .2, .09], [NT.C6, .3, .18], [NT.G5, .52, .08],
+                      [NT.C6, .62, .08], [NT.E6, .72, .1], [NT.G6, .84, .4], [NT.E6, 1.26, .08], [NT.G6, 1.36, .5]];
+        for (let i = 0; i < lead.length; i++) tone('square', lead[i][0], lead[i][0], lead[i][1] + 0.35, lead[i][2], 0.15);
+        tone('triangle', NT.C4, NT.C4, 0.35, 0.4, 0.3); tone('triangle', NT.G4, NT.G4, 0.85, 0.4, 0.3); tone('triangle', NT.C4, NT.C4, 1.35, 0.5, 0.3);
+        break;
+      }
+    }
+  }
+  function sweepTick(k) { if (ctx && on) tone('square', 523 * Math.pow(1.0595, k * 2), 523 * Math.pow(1.0595, k * 2), 0, 0.04, 0.09); }
+  function stopAll() { for (let i = voices.length - 1; i >= 0; i--) { try { voices[i].stop(); } catch (e) {} } voices.length = 0; }
+  function toggle() { on = !on; if (master) master.gain.setValueAtTime(gainNow(), ctx.currentTime); if (!on) stopAll(); else tone('square', 660, 880, 0, 0.06, 0.14); }
+  function setVol(v) { vol = Math.max(0, Math.min(5, v)); if (master) master.gain.setValueAtTime(gainNow(), ctx.currentTime); if (on) tone('square', 440, 440, 0, 0.04, 0.12); }
+  return { unlock, onEvent, sweepTick, stopAll, toggle, setVol, get on() { return on; }, get vol() { return vol; } };
+})();
+
+/* ------------------------------------------------------------------ */
+/* ANIMATION / CONTROLLER LAYER                                        */
+/* ------------------------------------------------------------------ */
+/*            0   SS  PS  CMP RES SWP PRG SWC NSW PC  LCK ERL CMPL RST */
+const DUR  = [0, 54, 36, 21, 12, 30, 0,  6,  9, 36, 42, 120, 72, 0];
+const AUTO = [0,  0,  0,  0,  1,  1, 0,  0,  0,  1,  0,  0,  0, 0];
+const SPEEDS = [1, 2, 4]; let speedIdx = 0;
+
+const anim = { active: false, t: 0, dur: 1, sweepStep: 4, lastSweep: -1 };
+let gen = null, started = false, running = false, stepActive = false, finished = false;
+let frame = 0, riseT = 0, holdT = 0, lastPage = -1;
+const RISE_END = 64;
+
+let cmpText = '', cmpCol = C.YEL, ex1 = '', ex2 = '', laneText = '', hashHex = '';
+
+function statusStr() {
+  if (finished) return 'SORTED';
+  if (!started) return 'READY';
+  if (!running && !stepActive) return 'PAUSED';
+  switch (cur.type) {
+    case EVT.SORT_START: return 'STARTING'; case EVT.PASS_START: return 'NEW PASS'; case EVT.COMPARE: return 'COMPARING';
+    case EVT.COMPARISON_RESULT: return 'DECIDING'; case EVT.SWAP_START: return 'SWAPPING'; case EVT.SWAP_COMPLETE: return 'SWAPPED';
+    case EVT.NO_SWAP: return 'KEEP'; case EVT.PASS_COMPLETE: return 'PASS DONE'; case EVT.ELEMENT_LOCKED: return 'LOCKED';
+    case EVT.EARLY_TERMINATION: return 'EARLY EXIT'; case EVT.SORT_COMPLETE: return 'SORTED';
+  }
+  return 'READY';
+}
+function statusCol() {
+  const s = statusStr();
+  return s === 'SORTED' || s === 'LOCKED' || s === 'EARLY EXIT' ? C.LIME : s === 'SWAPPING' || s === 'SWAPPED' ? C.LPINK : s === 'PAUSED' ? C.ORANGE : s === 'KEEP' ? C.CYAN : C.YEL;
+}
+
+function setTexts() {
+  const e = cur, l = e.leftValue, r = e.rightValue;
+  switch (e.type) {
+    case EVT.SORT_START:
+      cmpText = 'SORT START: ' + N + ' VALUES'; cmpCol = C.YEL; ex1 = 'COMPARE NEIGHBORS.'; ex2 = 'LARGER VALUES BUBBLE RIGHT.'; break;
+    case EVT.PASS_START:
+      cmpText = 'PASS ' + (e.passIndex + 1) + '  UNSORTED 0' + ARW + e.activeEnd; cmpCol = C.SKY;
+      ex1 = 'PASS ' + (e.passIndex + 1) + ': COMPARE NEIGHBORS.'; ex2 = 'LARGEST HERE ENDS AT INDEX ' + e.activeEnd + '.'; break;
+    case EVT.COMPARE:
+      cmpText = l + ' > ' + r + ' ?'; cmpCol = C.YEL; ex1 = 'COMPARE ADJACENT ELEMENTS.'; ex2 = 'IS A[J] > A[J+1] ?  J=' + e.leftIndex; break;
+    case EVT.COMPARISON_RESULT:
+      if (e.didSwap) { cmpText = l + ' > ' + r + ' ? YES' + ARW + 'SWAP'; cmpCol = C.LPINK; ex1 = 'OUT OF ORDER, SO THEY SWAP.'; ex2 = l + ' IS LARGER THAN ' + r + '.'; }
+      else { cmpText = l + ' > ' + r + ' ? NO' + ARW + 'KEEP'; cmpCol = C.LIME; ex1 = 'IN ORDER, SO THEY STAY.';
+             ex2 = l === r ? 'EQUAL VALUES NEVER SWAP.' : l + ' IS NOT LARGER THAN ' + r + '.'; }
+      break;
+    case EVT.SWAP_START:
+      cmpText = 'SWAP ' + l + ' AND ' + r; cmpCol = C.LPINK; ex1 = 'THEY ARE OUT OF ORDER, SO'; ex2 = 'BUBBLE SORT SWAPS THEM.'; break;
+    case EVT.SWAP_COMPLETE:
+      cmpText = 'A[J]=' + A[e.leftIndex] + ' A[J+1]=' + A[e.rightIndex]; cmpCol = C.LPINK; ex1 = A[e.rightIndex] + ' MOVED ONE STEP RIGHT.'; ex2 = 'LARGER VALUES BUBBLE RIGHT.'; break;
+    case EVT.NO_SWAP:
+      cmpText = l + ' <= ' + r + '  ' + CHK + ' OK'; cmpCol = C.CYAN; ex1 = 'LEFT <= RIGHT: KEEP IN PLACE.'; ex2 = 'MOVE ON TO THE NEXT PAIR.'; break;
+    case EVT.PASS_COMPLETE:
+      cmpText = 'PASS ' + (e.passIndex + 1) + ' COMPLETE'; cmpCol = C.SKY; ex1 = 'THE LARGEST REMAINING VALUE IS'; ex2 = 'NOW IN ITS FINAL POSITION.'; break;
+    case EVT.ELEMENT_LOCKED:
+      cmpText = e.lockedValue + ' LOCKED AT INDEX ' + e.lockedIndex; cmpCol = C.LIME; ex1 = 'INDEX ' + e.lockedIndex + ' IS NOW LOCKED.'; ex2 = 'SORTED SUFFIX: ' + (N - e.lockedIndex) + ' OF ' + N + '.'; break;
+    case EVT.EARLY_TERMINATION:
+      cmpText = 'NO SWAPS ' + ARW + ' ARRAY SORTED'; cmpCol = C.LIME; ex1 = 'A FULL PASS MADE NO SWAPS,'; ex2 = 'SO THE ARRAY IS ALREADY SORTED'; break;
+    case EVT.SORT_COMPLETE:
+      cmpText = 'SORT COMPLETE'; cmpCol = C.LIME; ex1 = 'EVERY ADJACENT PAIR IS ORDERED'; ex2 = 'THE ARRAY IS SORTED.'; break;
+    default: break;
+  }
+}
+function setIntroTexts() {
+  cmpText = ''; cmpCol = C.YEL; ex1 = 'COMPARE NEIGHBORS.'; ex2 = 'LARGER VALUES BUBBLE RIGHT.';
+  laneText = seed === 0 ? 'PRESET DATA  SEED 0' : 'SHUFFLED  SEED ' + seed;
+}
+function setHoldPage(pg) {
+  lastPage = pg;
+  if (pg === 0) { ex1 = 'PASSES ' + ALG.passesDone + ' COMPARES ' + ALG.cmpCount + ' SWAPS ' + ALG.swapCount; ex2 = null; }
+  else if (pg === 1) { ex1 = 'TIME: AVG/WORST O(N^2)'; ex2 = 'BEST O(N): SORTED + EARLY EXIT'; }
+  else if (pg === 2) { ex1 = 'SPACE O(1): SORTS IN PLACE.'; ex2 = 'STABLE: EQUAL KEYS KEEP ORDER'; }
+  else { ex1 = 'SEED ' + seed + '  EVENTS ' + evSeq; ex2 = 'EVENT HASH ' + hashHex; }
+}
+
+function beginEvent() {
+  anim.t = 0; anim.active = true; anim.lastSweep = -1;
+  const base = DUR[cur.type];
+  anim.dur = Math.max(2, Math.round(base / SPEEDS[speedIdx]));
+  anim.sweepStep = Math.max(0.5, (anim.dur - 8) / N);
+  setTexts();
+  audio.onEvent(cur);
+  if (cur.type === EVT.ELEMENT_LOCKED) {
+    const k = cur.lockedIndex; burst(barX(k) + 3, YB - A[k] * SC - 2, 14, C.YEL, C.LIME, 0.9, 0.5);
+  }
+}
+function onAnimTick() {
+  if (cur.type === EVT.SWAP_START && anim.t === (anim.dur >> 1)) {       /* SWAP_PROGRESS (animation-layer event) */
+    audio.onEvent({ type: EVT.SWAP_PROGRESS });
+    const j = cur.leftIndex; const top = YB - Math.max(A[j], A[j + 1]) * SC;
+    burst(barX(j) + P, top - 4, 9, C.YEL, C.LPINK, 0.8, 0.6);
+  }
+  if (cur.type === EVT.SORT_COMPLETE) {
+    const s = (anim.t / anim.sweepStep) | 0;
+    if (s !== anim.lastSweep && s < N) { anim.lastSweep = s; audio.sweepTick(s); burst(barX(s) + 3, YB - A[s] * SC - 2, 4, C.LIME, C.WHITE, 0.7, 0.4); }
+  }
+}
+function pullNext() {
+  if (finished) return;
+  if (!gen) gen = bubbleSortGen();
+  const r = gen.next();
+  if (r.done) return;
+  copyEv(cur, EV);
+  cur.autoNext = AUTO[cur.type];
+  beginEvent();
+}
+function enterHold() {
+  finished = true; running = false; stepActive = false; holdT = 0; lastPage = -1;
+  hashHex = (evHash >>> 0).toString(16).toUpperCase(); while (hashHex.length < 8) hashHex = '0' + hashHex;
+}
+function finishEvent() {
+  if (cur.type === EVT.SORT_COMPLETE) { enterHold(); return; }
+  if (running || AUTO[cur.type]) pullNext(); else stepActive = false;
+}
+function simTick() {
+  frame++; if (riseT < 400) riseT++;
+  fxUpdate();
+  if (finished) { holdT++; return; }
+  if (!started || !(running || stepActive)) return;
+  if (anim.active) {
+    anim.t++; onAnimTick();
+    if (anim.t >= anim.dur) { anim.active = false; finishEvent(); }
+  } else pullNext();
+}
+
+/* ---- controls ---- */
+function resetAll() {
+  for (let i = 0; i < N; i++) A[i] = INIT[i];
+  ALG.i = 0; ALG.j = -1; ALG.swapped = false; ALG.passNo = 0; ALG.passCmp = 0; ALG.passCmpTotal = 0; ALG.activeEnd = N - 1;
+  ALG.sortedStart = N; ALG.sortedBefore = N; ALG.cmpCount = 0; ALG.swapCount = 0; ALG.passesDone = 0; ALG.earlyExit = false; ALG.done = false;
+  gen = null; started = false; running = false; stepActive = false; finished = false;
+  anim.active = false; anim.t = 0; anim.dur = 1;
+  evSeq = 0; evHash = 2166136261 >>> 0;
+  audio.stopAll(); fxClear();
+  emit(EVT.RESET); copyEv(cur, EV); cur.autoNext = 0;
+  riseT = 0; holdT = 0; lastPage = -1;
+  setIntroTexts();
+}
+function doStart() {
+  audio.unlock();
+  if (finished) resetAll();
+  started = true; running = true; stepActive = false; riseT = 999;
+}
+function doPause() { if (started && !finished) { running = false; stepActive = false; } }
+function doStep() {
+  audio.unlock();
+  if (finished) return;
+  started = true; running = false; riseT = 999;
+  if (anim.active) {                                   /* finish the event in flight, then advance exactly one event */
+    anim.active = false; anim.t = anim.dur;
+    if (cur.type === EVT.SORT_COMPLETE) { enterHold(); return; }
+  }
+  pullNext(); stepActive = true;
+}
+function doReset() { audio.unlock(); resetAll(); }
+function doShuffle() { audio.unlock(); seed = seed + 1; makeDataset(seed, INIT); resetAll(); }
+function doSound() { audio.unlock(); audio.toggle(); }
+function doSpeed() { speedIdx = (speedIdx + 1) % SPEEDS.length; }
+
+/* ------------------------------------------------------------------ */
+/* RENDERING LAYER (read-only)                                         */
+/* ------------------------------------------------------------------ */
+const ST_NORMAL = 0, ST_CMP = 1, ST_SWAP = 2, ST_OK = 3, ST_SORTED = 4, ST_WHITE = 5;
+const PT = new Uint8Array([13,14,12,  8,5,7,  17,19,23,  15,5,11,  10,9,20,  5,5,4]);
+const LBLC = [C.LSLATE, C.YEL, C.LPINK, C.CYAN, C.LIME, C.WHITE];
+const IDXC = [C.SLATE, C.YEL, C.YEL, C.CYAN, C.TEAL, C.WHITE];
+
+function stateOf(k) {
+  const t = cur.type;
+  if (t === EVT.SORT_COMPLETE) {
+    if (anim.active) {
+      const s = (anim.t / anim.sweepStep) | 0;
+      if (k < s) return ST_SORTED; if (k === s) return ST_WHITE;
+      return k >= cur.sortedBefore ? ST_SORTED : ST_OK;
+    }
+    return ST_SORTED;
+  }
+  if (k >= ALG.sortedStart) {
+    if (t === EVT.ELEMENT_LOCKED && k === cur.lockedIndex && anim.active && (((anim.t / 4) | 0) & 1) === 0) return ST_WHITE;
+    return ST_SORTED;
+  }
+  if (t === EVT.EARLY_TERMINATION) return (anim.active && ((anim.t >> 3) & 1)) ? ST_NORMAL : ST_OK;
+  if (t === EVT.PASS_START && anim.active && ((anim.t >> 2) & 1)) return ST_OK;
+  if (t === EVT.PASS_COMPLETE && k === ALG.activeEnd) return (anim.active && ((anim.t >> 2) & 1)) ? ST_WHITE : ST_NORMAL;
+  if (k === cur.leftIndex || k === cur.rightIndex) {
+    if (t === EVT.COMPARE) return ST_CMP;
+    if (t === EVT.COMPARISON_RESULT) return cur.didSwap ? ST_SWAP : ST_CMP;
+    if (t === EVT.SWAP_START || t === EVT.SWAP_COMPLETE) return ST_SWAP;
+    if (t === EVT.NO_SWAP) return ST_OK;
+  }
+  return ST_NORMAL;
+}
+
+function drawBar(x, top, w, h, st) {
+  const m = PT[st * 3], l = PT[st * 3 + 1], d = PT[st * 3 + 2];
+  rect(x, top, w, h, m);
+  rect(x, top, w, 1, l); rect(x, top, 1, h, l);
+  rect(x + w - 1, top, 1, h, d); if (h > 1) rect(x, top + h - 1, w, 1, d);
+  if (h >= 7) { pset(x + 2, top + 2, l); pset(x + 2, top + 3, l); if (h >= 12) { pset(x + 2, top + 5, l); pset(x + 2, top + 6, l); } }
+}
+function drawOneBar(k, x, hop) {
+  const st = stateOf(k); let h = A[k] * SC;
+  if (riseT < RISE_END) { const hv = Math.min(h, Math.max(0, (riseT - k * 2) * 2)); if (hv <= 0) return; h = hv; }
+  const top = YB - h - hop;
+  drawBar(x, top, BW, h, st);
+  drawNumC(A[k], x + 3, top - 6, LBLC[st]);
+}
+function drawBars() {
+  const swapping = cur.type === EVT.SWAP_START;
+  let sj = -1, dx = 0, hopL = 0, hopR = 0;
+  if (swapping) {
+    sj = cur.leftIndex; const p = anim.t / anim.dur, e = p * p * (3 - 2 * p);
+    dx = Math.round(e * P); const s = Math.sin(Math.PI * p); hopL = Math.round(s * 6); hopR = Math.round(s * 2);
+  }
+  for (let k = 0; k < N; k++) { if (swapping && (k === sj || k === sj + 1)) continue; drawOneBar(k, barX(k), 0); }
+  if (swapping) { drawOneBar(sj + 1, barX(sj + 1) - dx, hopR); drawOneBar(sj, barX(sj) + dx, hopL); }
+}
+
+function drawLane() {
+  const t = cur.type;
+  if (t < EVT.COMPARE || t > EVT.NO_SWAP || t === EVT.SWAP_PROGRESS || cur.leftIndex < 0) return;
+  const l = cur.leftIndex, xl = barX(l), xr = barX(l + 1) + BW - 1;
+  const col = t === EVT.NO_SWAP ? C.CYAN : (t === EVT.SWAP_START || t === EVT.SWAP_COMPLETE || (t === EVT.COMPARISON_RESULT && cur.didSwap)) ? C.LPINK : C.YEL;
+  drawTextC('J', xl + 3, 27, col); drawTextC('J+1', xr - 3, 27, col);
+  hline(xl, 32, xr - xl + 1, col); pset(xl, 33, col); pset(xr, 33, col);
+  rect(xl + BW, 33, 2, 3, ((frame >> 3) & 1) ? C.WHITE : col);
+}
+
+function drawFloor() {
+  hline(4, YB, 120, C.PANL);
+  const ss = ALG.sortedStart, xs = barX(Math.min(ss, N));
+  if (ss < N) {
+    hline(xs - 1, YB, barX(N - 1) + BW - xs + 1, C.GREEN); hline(xs - 1, YB + 1, barX(N - 1) + BW - xs + 1, C.GREEN);
+    if (ss > 0) for (let y = 36; y < YB; y++) if (y % 3) pset(xs - 1, y, C.GREEN);
+  }
+  if (ss > 0 && !finished && !(cur.type === EVT.SORT_COMPLETE)) {             /* pixel bracket around the active range */
+    const ae = Math.min(ALG.activeEnd, ss - 1); const xa = barX(0), xb = barX(ae) + BW - 1;
+    const bc = (cur.type === EVT.PASS_START && anim.active && ((anim.t >> 2) & 1)) ? C.WHITE : C.SKY;
+    hline(xa, YB, xb - xa + 1, bc); pset(xa, YB + 1, bc); pset(xb, YB + 1, bc);
+  }
+}
+
+function drawHeader() {
+  rect(0, 0, W, 7, C.PAN); hline(0, 7, W, C.PANL);
+  drawText('BUBBLE SORT', 4, 2, C.RED); drawText('BUBBLE SORT', 3, 1, C.YEL);
+  drawText(SPEEDS[speedIdx] + 'X', 52, 1, C.SLATE);
+  drawText('VOL', 63, 1, C.SLATE);
+  for (let k = 0; k < 5; k++) rect(76 + k * 4, 5 - k, 3, k + 1, k < audio.vol ? (audio.on ? C.LIME : C.SLATE) : C.PANL);
+  drawText('O(N^2)', 101, 1, C.LSLATE);
+}
+function drawHud() {
+  let x;
+  x = drawText('PASS ', 3, 9, C.SLATE); x = drawNum(ALG.passNo, x, 9, C.WHITE); x = drawText('/', x, 9, C.SLATE); drawNum(N - 1, x, 9, C.LSLATE);
+  x = drawText('CMP ', 45, 9, C.SLATE); x = drawNum(ALG.passCmp, x, 9, C.WHITE); x = drawText('/', x, 9, C.SLATE); drawNum(ALG.passCmpTotal, x, 9, C.LSLATE);
+  x = drawText('RANGE ', 87, 9, C.SLATE); x = drawNum(0, x, 9, C.WHITE); x = drawText('-', x, 9, C.SLATE); drawNum(ALG.activeEnd, x, 9, C.WHITE);
+  x = drawText('COMPS ', 3, 15, C.SLATE); drawNum(ALG.cmpCount, x, 15, C.WHITE);
+  x = drawText('SWAPS ', 45, 15, C.SLATE); drawNum(ALG.swapCount, x, 15, C.WHITE);
+  drawText(statusStr(), 87, 15, statusCol());
+  for (let xx = 2; xx < 126; xx += 3) pset(xx, 20, C.PANL);          /* scanline-style separator */
+}
+
+/* controls */
+const BTN = [{ l: 'START' }, { l: 'PAUSE' }, { l: 'STEP' }, { l: 'RESET' }, { l: 'SHUF' }, { l: 'SND' }];
+(() => { let x = 3; for (const b of BTN) { b.w = textW(b.l) + 4; b.x = x; b.y = 89; b.h = 7; x += b.w; } })();
+let hoverBtn = -1, pressBtn = -1;
+function drawButtons() {
+  for (let i = 0; i < BTN.length; i++) {
+    const b = BTN[i];
+    let lit = false, col = C.WHITE;
+    if (i === 0) lit = running; else if (i === 1) lit = started && !running && !finished;
+    if (i === 5) col = audio.on ? C.LIME : C.RED;
+    const bg = pressBtn === i ? C.NAVY : lit ? C.BLUE : hoverBtn === i ? C.SLATE : C.PANL;
+    rect(b.x, b.y, b.w, b.h, bg);
+    hline(b.x, b.y, b.w, lit ? C.SKY : C.SLATE); hline(b.x, b.y + b.h - 1, b.w, C.PAN); vline(b.x + b.w - 1, b.y, b.h, C.PAN);
+    drawText(b.l, b.x + 2, b.y + 1, col);
+  }
+}
+
+function drawHold() {
+  const pg = ((holdT / 150) | 0) & 3;
+  if (pg !== lastPage) setHoldPage(pg);
+}
+
+function draw() {
+  px32.fill(PAL[C.BG]);
+  for (let y = 36; y < YB; y += 8) for (let x = 4; x < 124; x += 8) pset(x, y, C.PAN);      /* faint dot grid */
+  drawHeader(); drawHud();
+
+  /* compare / verdict line */
+  if (!started && !finished) {
+    if (((frame >> 5) & 1) === 0) drawTextC('PRESS START', 64, 21, C.YEL); else drawTextC('OR PRESS STEP', 64, 21, C.SKY);
+    drawTextC(laneText, 64, 27, C.SLATE);
+  } else if (finished) {
+    drawTextC('SORT COMPLETE', 64, 21, ((frame >> 4) & 1) ? C.YEL : C.LIME);
+    if (((frame >> 5) & 1) === 0) drawTextC('START = REPLAY   SHUF = NEW DATA', 64, 27, C.SLATE);
+  } else if (cmpText) drawTextC(cmpText, 64, 21, (cur.type === EVT.EARLY_TERMINATION && ((frame >> 3) & 1)) ? C.WHITE : cmpCol);
+
+  drawLane();
+  drawFloor();
+  drawBars();
+  for (let k = 0; k < N; k++) { if (riseT < RISE_END && riseT < k * 2) continue; drawNumC(k, barX(k) + 3, YB + 3, IDXC[stateOf(k)]); }
+
+  /* particles */
+  for (let i = 0; i < MAXP; i++) if (PL[i] > 0) { const c = PC[i]; const x = Math.round(PX[i]), y = Math.round(PY[i]); if (PL[i] > 8) rect(x, y, 2, 2, c); else pset(x, y, c); }
+
+  /* explanation panel */
+  if (finished) drawHold();
+  rect(1, 77, 126, 12, C.DEEP); rect(1, 77, 2, 12, cmpCol === C.LIME ? C.GREEN : C.YEL);
+  drawText(ex1, 5, 78, C.WHITE);
+  if (ex2 === null) {                                            /* final sorted array row */
+    let x = 5; for (let i = 0; i < N; i++) { x = drawNum(A[i], x, 84, C.LIME) + 2 - 1; }
+  } else drawText(ex2, 5, 84, C.LSLATE);
+
+  drawButtons();
+  octx.putImageData(img, 0, 0);
+}
+
+/* ------------------------------------------------------------------ */
+/* DISPLAY: integer scale, centered, no smoothing                      */
+/* ------------------------------------------------------------------ */
+const screen = document.getElementById('screen');
+const dctx = screen.getContext('2d', { alpha: false });
+const off = document.createElement('canvas'); off.width = W; off.height = H;
+const octx = off.getContext('2d');
+let scale = 1, offX = 0, offY = 0, cw = W, ch = H, needClear = true;
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  cw = Math.max(W, Math.round(window.innerWidth * dpr)); ch = Math.max(H, Math.round(window.innerHeight * dpr));
+  screen.width = cw; screen.height = ch;
+  scale = Math.max(1, Math.floor(Math.min(cw / W, ch / H)));
+  offX = ((cw - W * scale) / 2) | 0; offY = ((ch - H * scale) / 2) | 0; needClear = true;
+}
+function blit() {
+  if (needClear) { dctx.fillStyle = HEX[C.BG]; dctx.fillRect(0, 0, cw, ch); needClear = false; }
+  dctx.imageSmoothingEnabled = false;
+  dctx.drawImage(off, 0, 0, W, H, offX, offY, W * scale, H * scale);
+}
+
+/* ------------------------------------------------------------------ */
+/* INPUT                                                               */
+/* ------------------------------------------------------------------ */
+let mx = -1, my = -1;
+function toLogical(e) {
+  const r = screen.getBoundingClientRect();
+  mx = Math.floor(((e.clientX - r.left) / r.width * cw - offX) / scale);
+  my = Math.floor(((e.clientY - r.top) / r.height * ch - offY) / scale);
+}
+function hitButton() { for (let i = 0; i < BTN.length; i++) { const b = BTN[i]; if (mx >= b.x && mx < b.x + b.w && my >= b.y && my < b.y + b.h) return i; } return -1; }
+function runButton(i) { if (i === 0) doStart(); else if (i === 1) doPause(); else if (i === 2) doStep(); else if (i === 3) doReset(); else if (i === 4) doShuffle(); else if (i === 5) doSound(); }
+screen.addEventListener('pointerdown', e => {
+  audio.unlock(); toLogical(e); screen.focus();
+  if (my >= 0 && my < 7 && mx >= 75 && mx < 96) { audio.setVol(Math.floor((mx - 75) / 4) + 1 === audio.vol ? audio.vol - 1 : Math.floor((mx - 75) / 4) + 1); return; }
+  pressBtn = hitButton();
+});
+screen.addEventListener('pointermove', e => { toLogical(e); hoverBtn = hitButton(); });
+screen.addEventListener('pointerup', e => { toLogical(e); const h = hitButton(); if (h >= 0 && h === pressBtn) runButton(h); pressBtn = -1; });
+screen.addEventListener('pointerleave', () => { hoverBtn = -1; pressBtn = -1; });
+window.addEventListener('keydown', e => {
+  const k = e.key;
+  if (k === ' ' || k === 'Enter') { e.preventDefault(); if (running) doPause(); else doStart(); }
+  else if (k === 'n' || k === 'N' || k === 'ArrowRight') { e.preventDefault(); doStep(); }
+  else if (k === 'r' || k === 'R') doReset();
+  else if (k === 's' || k === 'S') doShuffle();
+  else if (k === 'm' || k === 'M') doSound();
+  else if (k === 'f' || k === 'F') doSpeed();
+  else if (k === '+' || k === '=') { audio.unlock(); audio.setVol(audio.vol + 1); }
+  else if (k === '-' || k === '_') { audio.unlock(); audio.setVol(audio.vol - 1); }
+});
+window.addEventListener('resize', resize);
+
+/* ------------------------------------------------------------------ */
+/* MAIN LOOP: fixed 60 Hz simulation, rAF rendering                    */
+/* ------------------------------------------------------------------ */
+const STEP_MS = 1000 / 60;
+let last = 0, acc = 0;
+function loop(now) {
+  if (!last) last = now;
+  acc += Math.min(now - last, 100); last = now;
+  while (acc >= STEP_MS) { simTick(); acc -= STEP_MS; }
+  draw(); blit();
+  requestAnimationFrame(loop);
+}
+
+makeDataset(seed, INIT);
+resetAll();
+resize();
+requestAnimationFrame(loop);
+
+/* debug hook for determinism checks */
+window.__bubble = { A, ALG, get events() { return evSeq; }, get hash() { return evHash >>> 0; } };
+})();
+</script>
+</body>
+</html>

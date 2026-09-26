@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Floyd-Warshall - Pixel Visualization</title>
+<style>
+html,body{margin:0;padding:0;width:100%;height:100%;background:#0b0b1a;overflow:hidden}
+canvas{position:absolute;left:0;top:0;width:100%;height:100%;display:block;image-rendering:pixelated;image-rendering:crisp-edges}
+</style>
+</head>
+<body>
+<canvas id="screen"></canvas>
+<script>
+'use strict';
+/* =====================================================================
+   ARCHITECTURE
+   1) ALGORITHM  - runs the real Floyd-Warshall triple loop once per loop
+                   and records a deterministic EVENT STREAM (typed arrays).
+   2) ANIMATION  - replays those events at human speed into a DISPLAY STATE
+                   (a replica of dist/next built only from events).
+   3) RENDERING  - draws the display state. Never decides algorithm behavior.
+   Audio + particles are triggered from event dispatch, never from frame counts.
+   ===================================================================== */
+
+/* ===== 1. CONSTANTS / PALETTE ===== */
+const W = 128, H = 96;                       // logical resolution
+const PALHEX = [
+  '#0b0b1a','#14152b','#1f2145','#3d4070','#3b5dc9','#8fa4ff','#41a6f6','#73eff7',
+  '#38b764','#a7f070','#ffcd75','#ef7d57','#b13e53','#ff6b8a','#f4f4f4','#94b0c2',
+  '#566c86','#333c57','#5d275d','#c04ea2','#257179','#29366f','#7d5a2b','#ffec27'
+];                                           // 24 fixed colors
+const C_BG=0,C_PANEL=1,C_PANEL2=2,C_GRID=3,C_BLUE=4,C_LBLUE=5,C_SKY=6,C_CYAN=7,C_GREEN=8,C_LGREEN=9,
+      C_YEL=10,C_ORG=11,C_RED=12,C_PINK=13,C_WHITE=14,C_GRAYL=15,C_GRAY=16,C_GRAYD=17,C_PURP=18,
+      C_MAG=19,C_TEAL=20,C_NAVY=21,C_BROWN=22,C_GOLD=23;
+const PAL32 = new Uint32Array(PALHEX.length);
+(function () {
+  for (let i = 0; i < PALHEX.length; i++) {
+    const h = PALHEX[i];
+    // little-endian ABGR for Uint32 view over ImageData
+    PAL32[i] = (255 << 24) | (parseInt(h.substr(5, 2), 16) << 16) | (parseInt(h.substr(3, 2), 16) << 8) | parseInt(h.substr(1, 2), 16);
+  }
+})();
+const INF = Infinity, NONE = -1;
+
+/* ===== 2. GRAPH DEFINITION ===== */
+const V = 8;                                  // vertex count (drives every loop bound)
+const TOTAL = V * V * V;                      // number of relaxation checks
+const NAMES = 'ABCDEFGH';
+const MAXE = 24;
+// flat lists: from, to, weight.  Mode 0 = primary graph (negative edges, no negative cycle)
+// Mode 1 = demo graph with real negative cycle A->B->C->A = 2 + 1 - 5 = -2
+const GRAPHS = [
+  [0,1,10, 0,2,3, 2,1,2, 1,3,4, 2,3,9, 2,4,-3, 4,3,5, 3,4,0, 4,5,4, 3,5,2, 3,6,6, 5,6,3, 4,6,9, 5,7,5, 6,7,2, 1,4,7, 6,2,4, 5,3,-1],
+  [0,1,2, 1,2,1, 2,0,-5, 0,2,3, 1,3,4, 2,3,9, 2,4,-3, 4,3,5, 3,4,0, 4,5,4, 3,5,2, 3,6,6, 5,6,3, 4,6,9, 5,7,5, 6,7,2, 1,4,7, 6,2,4, 5,3,-1]
+];
+
+/* ===== 3. NODE COORDINATES (logical pixels, graph panel x 0..57, y 8..63) ===== */
+const NODE_X = [6, 17, 17, 30, 30, 43, 43, 52];
+const NODE_Y = [36, 17, 55, 26, 46, 17, 52, 35];
+
+/* ===== 4. DIRECTED EDGE LIST (preallocated, filled by loadGraph) ===== */
+const eFrom = new Int8Array(MAXE), eTo = new Int8Array(MAXE), eW = new Int16Array(MAXE);
+const eX0 = new Int16Array(MAXE), eY0 = new Int16Array(MAXE), eX1 = new Int16Array(MAXE), eY1 = new Int16Array(MAXE);
+const eAX1 = new Int16Array(MAXE), eAY1 = new Int16Array(MAXE), eAX2 = new Int16Array(MAXE), eAY2 = new Int16Array(MAXE);
+const eLX = new Int16Array(MAXE), eLY = new Int16Array(MAXE);
+const edgeIdx = new Int16Array(V * V);        // best (min weight) direct edge for each ordered pair
+let NE = 0;
+let graphMode = 0;
+
+/* ===== 5. DISTANCE MATRIX ===== */
+const direct = new Float64Array(V * V);       // min direct edge weight per pair (INF if none)
+const dist = new Float64Array(V * V);         // THE algorithmic distance matrix (single source of truth)
+
+/* ===== 6. NEXT / PATH MATRIX ===== */
+const nxt = new Int8Array(V * V);             // nxt[i][j] = first hop on best known i->j path
+
+function loadGraph(mode) {
+  const g = GRAPHS[mode];
+  NE = g.length / 3;
+  direct.fill(INF);
+  edgeIdx.fill(-1);
+  for (let e = 0; e < NE; e++) {
+    eFrom[e] = g[e * 3]; eTo[e] = g[e * 3 + 1]; eW[e] = g[e * 3 + 2];
+    const ix = eFrom[e] * V + eTo[e];
+    // multiple direct edges between the same pair: keep the minimum
+    if (eW[e] < direct[ix]) { direct[ix] = eW[e]; edgeIdx[ix] = e; }
+  }
+  for (let e = 0; e < NE; e++) {               // static pixel geometry for each edge
+    const a = eFrom[e], b = eTo[e];
+    const x0 = NODE_X[a], y0 = NODE_Y[a], x1 = NODE_X[b], y1 = NODE_Y[b];
+    const dx = x1 - x0, dy = y1 - y0, len = Math.sqrt(dx * dx + dy * dy);
+    const ux = dx / len, uy = dy / len, nx = -uy, ny = ux;
+    const rev = direct[b * V + a] !== INF ? 1 : 0;   // opposite edge exists -> separate the two lines
+    const off = rev ? 2 : 0;
+    const sx = x0 + ux * 5 + nx * off, sy = y0 + uy * 5 + ny * off;
+    const ex = x1 - ux * 5 + nx * off, ey = y1 - uy * 5 + ny * off;
+    eX0[e] = Math.round(sx); eY0[e] = Math.round(sy); eX1[e] = Math.round(ex); eY1[e] = Math.round(ey);
+    const bx = ex - ux * 3, by = ey - uy * 3;
+    eAX1[e] = Math.round(bx + nx * 2); eAY1[e] = Math.round(by + ny * 2);
+    eAX2[e] = Math.round(bx - nx * 2); eAY2[e] = Math.round(by - ny * 2);
+    eLX[e] = Math.round((sx + ex) / 2 + nx * (rev ? 4 : 0));
+    eLY[e] = Math.round((sy + ey) / 2 + ny * (rev ? 4 : 0));
+  }
+}
+
+/* ===== 12. EVENT GENERATION (storage) ===== */
+const EV_START=0, EV_COMPARE=1, EV_GRAPH=2, EV_INIT_CELL=3, EV_INIT_DONE=4, EV_K_START=5, EV_CHECK=6,
+      EV_UPDATE=7, EV_K_DONE=8, EV_MATRIX_DONE=9, EV_NC_START=10, EV_NC_CHECK=11, EV_NC_RESULT=12,
+      EV_QUERY=13, EV_PATH_STEP=14, EV_PATH_DONE=15, EV_END=16;
+const MAXEV = 3000;
+const evT = new Uint8Array(MAXEV), evK = new Int8Array(MAXEV), evI = new Int8Array(MAXEV), evJ = new Int8Array(MAXEV), evF = new Int8Array(MAXEV);
+const evCur = new Float64Array(MAXEV), evDik = new Float64Array(MAXEV), evDkj = new Float64Array(MAXEV), evCand = new Float64Array(MAXEV);
+let evN = 0;
+function emit(t, k, i, j, f, cur, dik, dkj, cand) {
+  const n = evN++;
+  evT[n] = t; evK[n] = k; evI[n] = i; evJ[n] = j; evF[n] = f;
+  evCur[n] = cur; evDik[n] = dik; evDkj[n] = dkj; evCand[n] = cand;
+}
+
+/* ===== 8. K / I / J LOOP STATE (algorithm side) ===== */
+let currentK = 0, currentI = 0, currentJ = 0;
+let vertexCount = V, totalUpdates = 0, totalChecks = 0, negativeCycleDetected = false;
+const pathTmp = new Int8Array(V + 2);
+const QUERIES = [0, 7, 2, 6, 1, 5, 7, 0];     // A>H, C>G, B>F, H>A (H>A is unreachable in the primary graph)
+
+/* ===== 11. PATH RECONSTRUCTION ===== */
+// Follow next[][] hop by hop. Returns node count, or 0 if there is no path.
+function reconstructPath(s, t, out) {
+  if (nxt[s * V + t] === NONE) return 0;
+  let n = 0, u = s;
+  out[n++] = u;
+  while (u !== t && n <= V) {
+    u = nxt[u * V + t];
+    if (u < 0) return 0;
+    out[n++] = u;
+  }
+  return u === t ? n : 0;
+}
+
+/* ===== 7. FLOYD-WARSHALL ALGORITHM (real, in place) ===== */
+function runFloydWarshall() {
+  evN = 0; totalUpdates = 0; totalChecks = 0; negativeCycleDetected = false;
+  currentK = currentI = currentJ = 0;
+  emit(EV_START, 0, 0, 0, 0, 0, 0, 0, 0);
+  emit(EV_COMPARE, 0, 0, 0, 0, 0, 0, 0, 0);
+  emit(EV_GRAPH, 0, 0, 0, 0, 0, 0, 0, 0);
+
+  // Matrix initialization: dist[i][i]=0, direct edge -> weight, else INF.
+  // next[i][i]=i, next[i][j]=j for direct edges, else NONE.
+  for (let i = 0; i < V; i++) {
+    for (let j = 0; j < V; j++) {
+      const ix = i * V + j;
+      if (i === j) { dist[ix] = 0; nxt[ix] = i; }
+      else if (direct[ix] !== INF) { dist[ix] = direct[ix]; nxt[ix] = j; }
+      else { dist[ix] = INF; nxt[ix] = NONE; }
+      emit(EV_INIT_CELL, 0, i, j, nxt[ix], dist[ix], 0, 0, 0);
+    }
+  }
+  emit(EV_INIT_DONE, 0, 0, 0, 0, 0, 0, 0, 0);
+
+  // k = the intermediate node currently allowed. Invariant: after finishing k,
+  // dist[i][j] is the best i->j path using only intermediates 0..k.
+  for (let k = 0; k < vertexCount; k++) {
+    currentK = k;
+    emit(EV_K_START, k, 0, 0, 0, 0, 0, 0, 0);
+    for (let i = 0; i < vertexCount; i++) {        // i = source
+      currentI = i;
+      for (let j = 0; j < vertexCount; j++) {      // j = destination
+        currentJ = j;
+        totalChecks++;
+        const cur = dist[i * V + j], dik = dist[i * V + k], dkj = dist[k * V + j];
+        // RELAXATION: never do arithmetic with INF; the path through k simply doesn't exist
+        if (dik === INF || dkj === INF) {
+          emit(EV_CHECK, k, i, j, 0, cur, dik, dkj, INF);
+          continue;
+        }
+        const cand = dik + dkj;
+        if (cand < cur) {
+          emit(EV_CHECK, k, i, j, 2, cur, dik, dkj, cand);
+          dist[i * V + j] = cand;                  // in-place update, visible immediately to later checks
+          nxt[i * V + j] = nxt[i * V + k];         // path info: first hop toward k
+          totalUpdates++;
+          emit(EV_UPDATE, k, i, j, nxt[i * V + j], cur, totalUpdates, 0, cand);
+        } else {
+          emit(EV_CHECK, k, i, j, 1, cur, dik, dkj, cand);
+        }
+      }
+    }
+    emit(EV_K_DONE, k, 0, 0, 0, 0, 0, 0, 0);
+  }
+  emit(EV_MATRIX_DONE, 0, 0, 0, 0, 0, totalUpdates, totalChecks, 0);
+
+  /* ===== 10. NEGATIVE CYCLE DETECTION: any dist[i][i] < 0 ===== */
+  emit(EV_NC_START, 0, 0, 0, 0, 0, 0, 0, 0);
+  for (let i = 0; i < V; i++) {
+    const d = dist[i * V + i];
+    if (d < 0) negativeCycleDetected = true;
+    emit(EV_NC_CHECK, 0, i, i, d < 0 ? 1 : 0, d, 0, 0, 0);
+  }
+  emit(EV_NC_RESULT, 0, 0, 0, negativeCycleDetected ? 1 : 0, 0, 0, 0, 0);
+
+  // Path queries: read the finished matrices only, no recomputation.
+  if (!negativeCycleDetected) {
+    for (let q = 0; q < QUERIES.length / 2; q++) {
+      const s = QUERIES[q * 2], t = QUERIES[q * 2 + 1];
+      const len = reconstructPath(s, t, pathTmp);
+      const dd = dist[s * V + t];
+      emit(EV_QUERY, len, s, t, len > 0 ? 1 : 0, dd, 0, 0, 0);
+      if (len > 0) {
+        for (let p = 0; p < len; p++) emit(EV_PATH_STEP, len, pathTmp[p], p, 0, 0, 0, 0, 0);
+        let sum = 0;
+        for (let p = 0; p < len - 1; p++) sum += direct[pathTmp[p] * V + pathTmp[p + 1]];
+        // verification: sum of edge weights along the path must equal dist. f=1 ok, f=3 FAIL
+        emit(EV_PATH_DONE, 0, s, t, sum === dd ? 1 : 3, dd, 0, 0, sum);
+      } else {
+        // no path: must agree with dist === INF, otherwise fail visibly
+        emit(EV_PATH_DONE, 0, s, t, dd === INF ? 2 : 3, dd, 0, 0, 0);
+      }
+    }
+  }
+  emit(EV_END, 0, 0, 0, negativeCycleDetected ? 1 : 0, 0, totalUpdates, totalChecks, 0);
+}
+
+/* ===== 13. ANIMATION STATE (display replica built only from events) ===== */
+const SPEEDS = [1, 2, 4, 8];
+let evIndex = 0, evTimer = 0, paused = false, speedIdx = 0, simTicks = 0;
+let dType = EV_START, dK = -1, dI = -1, dJ = -1, dCur = 0, dDik = 0, dDkj = 0, dCand = 0, dCode = -1;
+let dSteps = 0, dUpdates = 0, dAllowed = -1;
+let uI = 0, uJ = 0, uK = 0, uOld = 0, uNew = 0, uNext = 0, uTimer = 0;
+let ncI = -1, ncVal = 0, ncState = -1, ncFlag = 0;
+let qS = 0, qT = 0, qDist = 0, qReach = 0, qLen = 0, qShown = 0, qVer = -1, qSum = 0;
+const dDist = new Float64Array(V * V), dNext = new Int8Array(V * V), dKnown = new Uint8Array(V * V);
+const cellFlash = new Uint8Array(V * V), negNode = new Uint8Array(V), qPath = new Int8Array(V + 2);
+const edgeHL = new Uint8Array(MAXE);
+let lastTickT = 0;
+
+function resetDisplay() {
+  dDist.fill(INF); dNext.fill(NONE); dKnown.fill(0); cellFlash.fill(0); negNode.fill(0); qPath.fill(0);
+  dType = EV_START; dK = dI = dJ = -1; dCur = dDik = dDkj = dCand = 0; dCode = -1;
+  dSteps = 0; dUpdates = 0; dAllowed = -1; uTimer = 0; ncI = -1; ncState = -1;
+  qShown = 0; qVer = -1; qLen = 0;
+  evIndex = 0; evTimer = 0;
+}
+
+/* ===== 15. PARTICLE POOL (preallocated ring buffer) ===== */
+const NP = 420;
+const pX = new Float32Array(NP), pY = new Float32Array(NP), pVX = new Float32Array(NP), pVY = new Float32Array(NP);
+const pLife = new Int16Array(NP), pCol = new Uint8Array(NP), pKind = new Uint8Array(NP);
+let pHead = 0;
+let rngS = 0x2545F491;
+function rnd() { rngS ^= rngS << 13; rngS ^= rngS >>> 17; rngS ^= rngS << 5; return ((rngS >>> 0) % 100000) / 100000; }
+const COSW = Math.cos(0.16), SINW = Math.sin(0.16);
+function spawn(x, y, vx, vy, life, col, kind) {
+  const n = pHead; pHead = (pHead + 1) % NP;
+  pX[n] = x; pY[n] = y; pVX[n] = vx; pVY[n] = vy; pLife[n] = life; pCol[n] = col; pKind[n] = kind;
+}
+function fxBurst(x, y, n, c1, c2, sp) {
+  for (let i = 0; i < n; i++) {
+    const a = rnd() * 6.2832, s = sp * (0.4 + rnd() * 0.8);
+    spawn(x, y, Math.cos(a) * s, Math.sin(a) * s, 12 + ((rnd() * 12) | 0), (i & 1) ? c1 : c2, 0);
+  }
+}
+function fxStream(x0, y0, x1, y1, n, c) {
+  const dx = x1 - x0, dy = y1 - y0, l = Math.sqrt(dx * dx + dy * dy) || 1, sp = 1.5;
+  for (let i = 0; i < n; i++) {
+    const s = sp * (0.7 + rnd() * 0.6);
+    spawn(x0, y0, dx / l * s, dy / l * s, Math.ceil(l / s), c, 0);
+  }
+}
+function fxOrbit(x, y, n, c) {
+  for (let i = 0; i < n; i++) {
+    const a = i / n * 6.2832, r = 7, w = 0.16;
+    spawn(x + Math.cos(a) * r, y + Math.sin(a) * r, -Math.sin(a) * r * w, Math.cos(a) * r * w, 70, c, 1);
+  }
+}
+function updateParticles() {
+  for (let n = 0; n < NP; n++) {
+    if (pLife[n] <= 0) continue;
+    pX[n] += pVX[n]; pY[n] += pVY[n]; pLife[n]--;
+    if (pKind[n] === 1) { const vx = pVX[n], vy = pVY[n]; pVX[n] = vx * COSW - vy * SINW; pVY[n] = vx * SINW + vy * COSW; }
+  }
+}
+function cellCX(j) { return 68 + j * 8; }
+function cellCY(i) { return 18 + i * 7; }
+
+/* ===== 14. AUDIO ENGINE (procedural NES-style, Web Audio) ===== */
+let AC = null, sfxGain = null, musGain = null, noiseBuf = null, soundOn = false, musicOn = true;
+let nextMusic = 0, musStep = 0;
+function initAudio() {
+  if (AC) { if (AC.state === 'suspended') AC.resume(); return; }
+  try {
+    AC = new (window.AudioContext || window.webkitAudioContext)();
+    sfxGain = AC.createGain(); sfxGain.gain.value = 0.16; sfxGain.connect(AC.destination);
+    musGain = AC.createGain(); musGain.gain.value = 0.045; musGain.connect(AC.destination);
+    noiseBuf = AC.createBuffer(1, AC.sampleRate * 0.5, AC.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  } catch (e) { AC = null; }
+}
+function toneAt(f, d, type, v, t, dest, f2) {
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type; o.frequency.setValueAtTime(f, t);
+  if (f2) o.frequency.linearRampToValueAtTime(f2, t + d);
+  g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(v, t + 0.006); g.gain.linearRampToValueAtTime(0.0001, t + d);
+  o.connect(g); g.connect(dest); o.start(t); o.stop(t + d + 0.02);
+}
+function tone(f, d, type, v, delay, f2) {
+  if (!AC || !soundOn) return;
+  toneAt(f, d, type, v, AC.currentTime + (delay || 0), sfxGain, f2);
+}
+function noiseBurst(d, v, delay) {
+  if (!AC || !soundOn) return;
+  const t = AC.currentTime + (delay || 0), s = AC.createBufferSource(), g = AC.createGain();
+  s.buffer = noiseBuf; g.gain.setValueAtTime(v, t); g.gain.linearRampToValueAtTime(0.0001, t + d);
+  s.connect(g); g.connect(sfxGain); s.start(t); s.stop(t + d + 0.02);
+}
+const PENTA = [523, 587, 659, 784, 880, 1047, 1175, 1319];
+const S_START=0,S_KSTART=1,S_TICK=2,S_OK=3,S_FAIL=4,S_UPD=5,S_KDONE=6,S_NEG=7,S_NCOK=8,S_QUERY=9,S_PATH=10,S_DONE=11,S_RESET=12,S_INIT=13;
+function sfx(id, a) {
+  if (!AC || !soundOn) return;
+  switch (id) {
+    case S_START: for (let i = 0; i < 4; i++) tone([262, 330, 392, 523][i], 0.08, 'square', 0.5, i * 0.07); break;
+    case S_KSTART: tone(130, 0.18, 'square', 0.5, 0, 392); tone(392, 0.08, 'triangle', 0.5, 0.16); break;
+    case S_TICK: if (AC.currentTime - lastTickT > 0.05) { lastTickT = AC.currentTime; tone(1500, 0.02, 'square', 0.12); } break;
+    case S_OK: tone(500, 0.12, 'square', 0.4, 0, 1200); break;
+    case S_FAIL: if (AC.currentTime - lastTickT > 0.04) { lastTickT = AC.currentTime; tone(190, 0.05, 'triangle', 0.35); } break;
+    case S_UPD: tone(880, 0.05, 'square', 0.35); tone(1320, 0.09, 'square', 0.3, 0.05); break;
+    case S_KDONE: tone(523, 0.06, 'triangle', 0.6); tone(659, 0.06, 'triangle', 0.6, 0.06); tone(784, 0.12, 'triangle', 0.6, 0.12); break;
+    case S_NEG: for (let i = 0; i < 3; i++) { tone(220, 0.12, 'square', 0.5, i * 0.16, 110); noiseBurst(0.06, 0.25, i * 0.16); } break;
+    case S_NCOK: tone(659, 0.08, 'square', 0.4); tone(880, 0.14, 'square', 0.4, 0.08); break;
+    case S_QUERY: tone(988, 0.05, 'square', 0.4); tone(1319, 0.08, 'square', 0.4, 0.05); break;
+    case S_PATH: tone(PENTA[a & 7], 0.12, 'triangle', 0.7); break;
+    case S_DONE: for (let i = 0; i < 6; i++) tone([523, 659, 784, 1047, 784, 1047][i], i === 5 ? 0.3 : 0.09, 'square', 0.4, i * 0.09); break;
+    case S_RESET: tone(440, 0.18, 'square', 0.4, 0, 90); break;
+    case S_INIT: if (AC.currentTime - lastTickT > 0.03) { lastTickT = AC.currentTime; tone(700, 0.02, 'triangle', 0.3); } break;
+  }
+}
+// Optional low-volume looping background music (own gain node; never touches event sounds)
+const BASS = [110, 110, 165, 110, 131, 131, 196, 131, 98, 98, 147, 98, 131, 131, 165, 196];
+const ARP = [440, 523, 659, 523, 494, 587, 740, 587, 392, 494, 587, 494, 523, 659, 784, 659];
+function musicTick() {
+  if (!AC || !soundOn || !musicOn || paused) return;
+  const now = AC.currentTime;
+  if (nextMusic < now) nextMusic = now + 0.05;
+  while (nextMusic < now + 0.12) {
+    toneAt(BASS[musStep], 0.16, 'triangle', 1.0, nextMusic, musGain);
+    if (musStep & 1) toneAt(ARP[musStep], 0.08, 'square', 0.5, nextMusic, musGain);
+    nextMusic += 0.19; musStep = (musStep + 1) & 15;
+  }
+}
+
+/* ===== 20. AUDIO EVENT DISPATCH + ANIMATION EVENT APPLICATION ===== */
+// Applying an event updates the display replica, starts effects, and sets how long it is shown.
+function applyEvent(n) {
+  const t = evT[n];
+  dType = t;
+  switch (t) {
+    case EV_START: evTimer = 200; sfx(S_START); fxBurst(64, 20, 24, C_GOLD, C_CYAN, 1.6); break;
+    case EV_COMPARE: evTimer = 340; sfx(S_QUERY); break;
+    case EV_GRAPH: evTimer = 110; sfx(S_QUERY); break;
+    case EV_INIT_CELL: {
+      const ix = evI[n] * V + evJ[n];
+      dDist[ix] = evCur[n]; dNext[ix] = evF[n]; dKnown[ix] = 1; cellFlash[ix] = 10;
+      evTimer = 2; sfx(S_INIT); break;
+    }
+    case EV_INIT_DONE: evTimer = 60; sfx(S_KDONE); break;
+    case EV_K_START:
+      dK = evK[n]; dI = dJ = -1; dAllowed = dK; dCode = -1; evTimer = 70;
+      sfx(S_KSTART); fxBurst(NODE_X[dK], NODE_Y[dK], 22, C_GOLD, C_WHITE, 1.4); break;
+    case EV_CHECK: {
+      dK = evK[n]; dI = evI[n]; dJ = evJ[n];
+      dCur = evCur[n]; dDik = evDik[n]; dDkj = evDkj[n]; dCand = evCand[n]; dCode = evF[n];
+      dSteps++;
+      if (dCode === 0) { evTimer = 2; sfx(S_TICK); }
+      else if (dCode === 1) { evTimer = 7; sfx(S_FAIL); }
+      else {
+        evTimer = 40; sfx(S_OK);
+        fxStream(NODE_X[dI], NODE_Y[dI], NODE_X[dK], NODE_Y[dK], 5, C_CYAN);
+        fxStream(NODE_X[dK], NODE_Y[dK], NODE_X[dJ], NODE_Y[dJ], 5, C_LGREEN);
+      }
+      break;
+    }
+    case EV_UPDATE: {
+      dI = evI[n]; dJ = evJ[n]; dK = evK[n];
+      const ix = dI * V + dJ;
+      uI = dI; uJ = dJ; uK = dK; uOld = evCur[n]; uNew = evCand[n]; uNext = evF[n];
+      dDist[ix] = uNew; dNext[ix] = uNext;          // apply the algorithm's in-place update to the replica
+      dUpdates = evDik[n]; cellFlash[ix] = 30; uTimer = 90; evTimer = 34;
+      sfx(S_UPD); fxBurst(cellCX(dJ), cellCY(dI), 14, C_LGREEN, C_GOLD, 1.1);
+      break;
+    }
+    case EV_K_DONE: dI = dJ = -1; dCode = -1; evTimer = 45; sfx(S_KDONE); break;
+    case EV_MATRIX_DONE: dK = dI = dJ = -1; dAllowed = V - 1; evTimer = 80; sfx(S_DONE); break;
+    case EV_NC_START: ncI = -1; ncState = -1; evTimer = 50; sfx(S_QUERY); break;
+    case EV_NC_CHECK:
+      ncI = evI[n]; ncVal = evCur[n]; ncFlag = evF[n]; evTimer = 16;
+      if (ncFlag) { negNode[ncI] = 1; sfx(S_NEG); fxOrbit(NODE_X[ncI], NODE_Y[ncI], 10, C_RED); }
+      else sfx(S_TICK);
+      break;
+    case EV_NC_RESULT:
+      ncState = evF[n]; evTimer = 130;
+      if (ncState) { sfx(S_NEG); for (let i = 0; i < V; i++) if (negNode[i]) fxOrbit(NODE_X[i], NODE_Y[i], 12, C_PINK); }
+      else sfx(S_NCOK);
+      break;
+    case EV_QUERY:
+      qS = evI[n]; qT = evJ[n]; qDist = evCur[n]; qReach = evF[n]; qLen = evK[n]; qShown = 0; qVer = -1; qSum = 0;
+      evTimer = 60; sfx(S_QUERY); break;
+    case EV_PATH_STEP: {
+      const p = evJ[n];
+      qPath[p] = evI[n]; qShown = p + 1; evTimer = 24; sfx(S_PATH, p);
+      if (p > 0) fxStream(NODE_X[qPath[p - 1]], NODE_Y[qPath[p - 1]], NODE_X[qPath[p]], NODE_Y[qPath[p]], 6, C_GOLD);
+      break;
+    }
+    case EV_PATH_DONE:
+      qVer = evF[n]; qSum = evCand[n]; evTimer = 100;
+      if (qVer === 3) sfx(S_NEG); else sfx(S_NCOK);
+      break;
+    case EV_END:
+      evTimer = 240; sfx(S_DONE); ncFlag = evF[n];
+      for (let b = 0; b < 6; b++) fxBurst(12 + ((rnd() * 104) | 0), 10 + ((rnd() * 50) | 0), 14, C_GOLD, b & 1 ? C_CYAN : C_PINK, 1.5);
+      break;
+  }
+}
+function stepPlayback() {
+  if (evTimer > 0) { evTimer--; if (evTimer > 0) return; }
+  if (evIndex >= evN) { resetAll(true); return; }
+  applyEvent(evIndex++);
+}
+// Full reset: graph, algorithm state, event stream, display replica, particles.
+function resetAll(playSfx) {
+  loadGraph(graphMode);
+  runFloydWarshall();
+  resetDisplay();
+  pLife.fill(0);
+  if (playSfx) sfx(S_RESET);
+}
+
+/* ===== PIXEL PRIMITIVES (fixed 128x96 framebuffer, integer coords only) ===== */
+const cv = document.getElementById('screen');
+const dctx = cv.getContext('2d');
+const off = document.createElement('canvas'); off.width = W; off.height = H;
+const octx = off.getContext('2d');
+const img = octx.createImageData(W, H);
+const buf = new Uint32Array(img.data.buffer);
+function px(x, y, c) { x = x | 0; y = y | 0; if (x >= 0 && x < W && y >= 0 && y < H) buf[y * W + x] = PAL32[c]; }
+function rect(x, y, w, h, c) {
+  x = x | 0; y = y | 0;
+  const x2 = Math.min(W, x + w), y2 = Math.min(H, y + h), col = PAL32[c];
+  for (let yy = Math.max(0, y); yy < y2; yy++) for (let xx = Math.max(0, x); xx < x2; xx++) buf[yy * W + xx] = col;
+}
+function hline(x, y, w, c) { rect(x, y, w, 1, c); }
+function frame(x, y, w, h, c) { rect(x, y, w, 1, c); rect(x, y + h - 1, w, 1, c); rect(x, y, 1, h, c); rect(x + w - 1, y, 1, h, c); }
+function line(x0, y0, x1, y1, c) {                 // Bresenham
+  x0 = x0 | 0; y0 = y0 | 0; x1 = x1 | 0; y1 = y1 | 0;
+  const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+  let err = dx + dy;
+  for (let g = 0; g < 400; g++) {
+    px(x0, y0, c);
+    if (x0 === x1 && y0 === y1) break;
+    const e2 = 2 * err;
+    if (e2 >= dy) { err += dy; x0 += sx; }
+    if (e2 <= dx) { err += dx; y0 += sy; }
+  }
+}
+
+/* 3x5 pixel font */
+const FONT = new Uint8Array(128 * 5);
+const FDEF = {
+  '0':[7,5,5,5,7],'1':[2,6,2,2,7],'2':[7,1,7,4,7],'3':[7,1,7,1,7],'4':[5,5,7,1,1],'5':[7,4,7,1,7],'6':[7,4,7,5,7],'7':[7,1,1,1,1],'8':[7,5,7,5,7],'9':[7,5,7,1,7],
+  'A':[2,5,7,5,5],'B':[6,5,6,5,6],'C':[3,4,4,4,3],'D':[6,5,5,5,6],'E':[7,4,6,4,7],'F':[7,4,6,4,4],'G':[3,4,5,5,3],'H':[5,5,7,5,5],'I':[7,2,2,2,7],
+  'J':[1,1,1,5,2],'K':[5,5,6,5,5],'L':[4,4,4,4,7],'M':[5,7,7,5,5],'N':[6,5,5,5,5],'O':[2,5,5,5,2],'P':[6,5,6,4,4],'Q':[2,5,5,6,3],'R':[6,5,6,5,5],
+  'S':[3,4,2,1,6],'T':[7,2,2,2,2],'U':[5,5,5,5,7],'V':[5,5,5,5,2],'W':[5,5,7,7,5],'X':[5,5,2,5,5],'Y':[5,5,2,2,2],'Z':[7,1,2,4,7],
+  '-':[0,0,7,0,0],'+':[0,2,7,2,0],'=':[0,7,0,7,0],':':[0,2,0,2,0],'/':[1,1,2,4,4],'>':[4,2,1,2,4],'<':[1,2,4,2,1],'.':[0,0,0,0,2],',':[0,0,0,2,4],
+  '?':[7,1,3,0,2],'(':[1,2,2,2,1],')':[4,2,2,2,4],'[':[3,2,2,2,3],']':[6,2,2,2,6],'^':[2,5,0,0,0],'!':[2,2,2,0,2],'*':[0,5,2,5,0],'%':[5,1,2,4,5]
+};
+for (const ch in FDEF) { const r = FDEF[ch]; for (let i = 0; i < 5; i++) FONT[ch.charCodeAt(0) * 5 + i] = r[i]; }
+function chr(code, x, y, c, s) {
+  s = s || 1;
+  const b = (code & 127) * 5;
+  for (let r = 0; r < 5; r++) {
+    const bits = FONT[b + r];
+    for (let cc = 0; cc < 3; cc++) if (bits & (4 >> cc)) { if (s === 1) px(x + cc, y + r, c); else rect(x + cc * s, y + r * s, s, s, c); }
+  }
+}
+function ch(code, x, y, c) { chr(code, x, y, c); return x + 4; }
+function str(s, x, y, c, sc) {
+  sc = sc || 1;
+  for (let i = 0; i < s.length; i++) { chr(s.charCodeAt(i), x, y, c, sc); x += 4 * sc; }
+  return x;
+}
+function num(n, x, y, c) {
+  if (n === INF) return inf(x, y + 1, c);   // never loop on Infinity
+  n = Math.round(n);
+  if (n < 0) { chr(45, x, y, c); x += 4; n = -n; }
+  let d = 1;
+  while (d * 10 <= n) d *= 10;
+  while (d >= 1) { chr(48 + (Math.floor(n / d) % 10), x, y, c); x += 4; d = Math.floor(d / 10); }
+  return x;
+}
+function inf(x, y, c) {                             // infinity symbol, 5x3
+  px(x + 1, y, c); px(x + 2, y, c); px(x + 3, y, c);
+  px(x, y + 1, c); px(x + 2, y + 1, c); px(x + 4, y + 1, c);
+  px(x + 1, y + 2, c); px(x + 2, y + 2, c); px(x + 3, y + 2, c);
+  return x + 6;
+}
+function val(v, x, y, c) { return v === INF ? inf(x, y + 1, c) : num(v, x, y, c); }
+
+/* ===== 16. GRAPH RENDERING ===== */
+const HLCOL = [0, C_CYAN, C_LGREEN, C_GOLD];
+function markLeg(u, target, v) {                    // highlight edges of the CURRENT best known u->target path (from next[][])
+  let g = 0;
+  while (u !== target && g < V) {
+    const w = dNext[u * V + target];
+    if (w < 0) break;
+    const e = edgeIdx[u * V + w];
+    if (e >= 0) edgeHL[e] = v;
+    u = w; g++;
+  }
+}
+function computeEdgeHL() {
+  edgeHL.fill(0);
+  if ((dType === EV_CHECK || dType === EV_UPDATE) && dI >= 0 && dK >= 0) {
+    markLeg(dI, dK, 1);                              // i -> k
+    markLeg(dK, dJ, 2);                              // k -> j
+  } else if (dType >= EV_QUERY && dType <= EV_PATH_DONE) {
+    for (let s = 0; s < qShown - 1; s++) { const e = edgeIdx[qPath[s] * V + qPath[s + 1]]; if (e >= 0) edgeHL[e] = 3; }
+  }
+}
+function drawEdge(e, hl) {
+  const w = eW[e];
+  const c = hl ? HLCOL[hl] : (w < 0 ? C_RED : (w === 0 ? C_TEAL : C_GRAYL));
+  line(eX0[e], eY0[e], eX1[e], eY1[e], c);
+  line(eX1[e], eY1[e], eAX1[e], eAY1[e], c);         // arrowhead
+  line(eX1[e], eY1[e], eAX2[e], eAY2[e], c);
+  if (hl) {                                          // travelling pulse along highlighted edges (cosmetic)
+    const t = (simTicks % 30) / 30;
+    px(eX0[e] + (eX1[e] - eX0[e]) * t, eY0[e] + (eY1[e] - eY0[e]) * t, C_WHITE);
+  }
+}
+function drawGraph() {
+  rect(0, 8, 58, 56, C_BG);
+  computeEdgeHL();
+  for (let e = 0; e < NE; e++) if (!edgeHL[e]) drawEdge(e, 0);
+  for (let e = 0; e < NE; e++) if (edgeHL[e]) drawEdge(e, edgeHL[e]);
+  for (let e = 0; e < NE; e++) {                     // weight labels
+    const w = eW[e], aw = w < 0 ? -w : w, nd = aw >= 10 ? 2 : 1, wp = nd * 4 - 1 + (w < 0 ? 4 : 0);
+    const x = eLX[e] - (wp >> 1);
+    rect(x - 1, eLY[e] - 3, wp + 2, 7, C_BG);
+    num(w, x, eLY[e] - 2, edgeHL[e] ? C_WHITE : (w < 0 ? C_PINK : (w === 0 ? C_CYAN : C_YEL)));
+  }
+  const pulse = (simTicks >> 3) & 1;
+  const inRun = dType >= EV_K_START && dType <= EV_K_DONE;
+  for (let n = 0; n < V; n++) {
+    const x = NODE_X[n], y = NODE_Y[n];
+    let fill = C_NAVY, edge = C_LBLUE, lc = C_WHITE;
+    if (inRun || dType === EV_CHECK) {
+      if (n === dK) { fill = C_GOLD; edge = C_WHITE; lc = C_BG; }
+      else if (n === dI) { fill = C_BLUE; edge = C_WHITE; }
+      else if (n === dJ) { fill = C_GREEN; edge = C_WHITE; }
+    }
+    if (dType >= EV_QUERY && dType <= EV_PATH_DONE) {
+      if (n === qS) { fill = C_BLUE; edge = C_WHITE; } else if (n === qT) { fill = C_GREEN; edge = C_WHITE; }
+      for (let p = 0; p < qShown; p++) if (qPath[p] === n) edge = C_GOLD;
+    }
+    if (negNode[n]) { fill = C_RED; edge = C_PINK; }
+    if (n === dK && inRun) frame(x - 4 - pulse, y - 4 - pulse, 9 + 2 * pulse, 9 + 2 * pulse, C_GOLD);
+    rect(x - 3, y - 3, 7, 7, fill); frame(x - 3, y - 3, 7, 7, edge);
+    chr(65 + n, x - 1, y - 2, lc);
+    if (n <= dAllowed) px(x + 4, y - 4, C_LGREEN);   // dot = "allowed intermediate" so far
+  }
+}
+function drawStrip() {                               // y 64..70: I -> K -> J concept diagram
+  rect(0, 64, 58, 7, C_PANEL);
+  if (dK < 0 || !(dType >= EV_K_START && dType <= EV_K_DONE)) return;
+  rect(1, 64, 7, 7, dI >= 0 ? C_BLUE : C_GRAYD); if (dI >= 0) chr(65 + dI, 3, 65, C_WHITE); else chr(63, 3, 65, C_GRAY);
+  hline(9, 67, 3, C_GRAYL); px(10, 66, C_GRAYL); px(10, 68, C_GRAYL); px(12, 67, C_GRAYL);
+  rect(13, 64, 7, 7, C_GOLD); chr(65 + dK, 15, 65, C_BG);
+  hline(21, 67, 3, C_GRAYL); px(22, 66, C_GRAYL); px(22, 68, C_GRAYL); px(24, 67, C_GRAYL);
+  rect(25, 64, 7, 7, dJ >= 0 ? C_GREEN : C_GRAYD); if (dJ >= 0) chr(65 + dJ, 27, 65, C_WHITE); else chr(63, 27, 65, C_GRAY);
+  if (dAllowed >= 0) { let x = str('OK:A-', 34, 65, C_LGREEN); ch(65 + dAllowed, x, 65, C_LGREEN); }
+}
+
+/* ===== 17. MATRIX RENDERING ===== */
+function cellVal(v, cx, cy, c) {
+  if (v === INF) { inf(cx + 1, cy + 2, C_GRAY); return; }
+  if (v < -9) { const x = ch(60, cx + 1, cy + 1, C_PINK); chr(57, x, cy + 1, C_PINK); return; }   // "<9" = below -9
+  if (v > 99) { const x = ch(62, cx + 1, cy + 1, c); chr(57, x, cy + 1, c); return; }
+  const a = v < 0 ? -v : v, w = (a >= 10 ? 7 : 3) + (v < 0 ? 4 : 0);
+  num(v, cx + ((8 - w) >> 1), cy + 1, c);
+}
+function drawMatrix() {
+  const inRun = dType >= EV_K_START && dType <= EV_K_DONE;
+  const showIJ = dType === EV_CHECK || dType === EV_UPDATE;
+  rect(58, 8, 6, 7, C_PANEL);
+  for (let j = 0; j < V; j++) {
+    let c = C_GRAYL; if (inRun && j === dK) c = C_GOLD; else if (showIJ && j === dJ) c = C_LGREEN;
+    if (dType >= EV_QUERY && dType <= EV_PATH_DONE && j === qT) c = C_LGREEN;
+    rect(64 + j * 8, 8, 8, 6, C_PANEL); chr(65 + j, 64 + j * 8 + 3, 9, c);
+  }
+  for (let i = 0; i < V; i++) {
+    let c = C_GRAYL; if (inRun && i === dK) c = C_GOLD; else if (showIJ && i === dI) c = C_LBLUE;
+    if (dType >= EV_QUERY && dType <= EV_PATH_DONE && i === qS) c = C_LBLUE;
+    rect(58, 15 + i * 7, 6, 7, C_PANEL); chr(65 + i, 59, 16 + i * 7, c);
+  }
+  for (let i = 0; i < V; i++) {
+    for (let j = 0; j < V; j++) {
+      const cx = 64 + j * 8, cy = 15 + i * 7, ix = i * V + j;
+      let bg = ((i + j) & 1) ? C_PANEL : C_PANEL2;
+      if (inRun && dK >= 0 && (i === dK || j === dK)) bg = C_NAVY;
+      if (cellFlash[ix] > 0) bg = ((cellFlash[ix] >> 2) & 1) ? C_GREEN : C_TEAL;
+      if (i === j && negNode[i]) bg = C_RED;
+      rect(cx, cy, 8, 7, bg);
+      if (showIJ && dK >= 0) {
+        if (i === dI && j === dK) frame(cx, cy, 8, 7, C_LBLUE);          // dist[i][k]
+        if (i === dK && j === dJ) frame(cx, cy, 8, 7, C_LGREEN);         // dist[k][j]
+      }
+      const cur = showIJ && i === dI && j === dJ;
+      const nc = dType === EV_NC_CHECK && i === ncI && j === ncI;
+      const q = dType >= EV_QUERY && dType <= EV_PATH_DONE && i === qS && j === qT;
+      if (cur) { rect(cx, cy, 8, 7, cellFlash[ix] > 0 ? C_GREEN : C_BROWN); frame(cx, cy, 8, 7, C_GOLD); }   // dist[i][j] strongly highlighted
+      if (nc) frame(cx, cy, 8, 7, C_WHITE);
+      if (q) { frame(cx, cy, 8, 7, C_GOLD); }
+      if (!dKnown[ix]) continue;
+      const v = dDist[ix];
+      let tc = v === INF ? C_GRAY : (v < 0 ? C_PINK : (i === j ? C_GRAYL : C_WHITE));
+      if (i === j && negNode[i]) tc = C_WHITE;
+      cellVal(v, cx, cy, tc);
+    }
+  }
+  rect(63, 8, 1, 63, C_GRAY); rect(58, 14, 70, 1, C_GRAY);
+}
+
+/* ===== 18. HUD RENDERING ===== */
+function drawTitle() {
+  rect(0, 0, W, 7, C_NAVY); hline(0, 7, W, C_BLUE);
+  str('FLOYD-WARSHALL', 1, 1, C_GOLD);
+  // speaker icon: waves when sound on, slash when off
+  rect(60, 2, 2, 3, soundOn ? C_LGREEN : C_GRAY); rect(62, 1, 1, 5, soundOn ? C_LGREEN : C_GRAY);
+  if (soundOn) { px(64, 2, C_LGREEN); px(65, 3, C_LGREEN); px(64, 4, C_LGREEN); } else { px(64, 2, C_PINK); px(65, 3, C_PINK); px(64, 4, C_PINK); px(65, 2, C_PINK); px(65, 4, C_PINK); }
+  if (paused) { rect(68, 1, 2, 5, C_WHITE); rect(71, 1, 2, 5, C_WHITE); }
+  else if (speedIdx > 0) { let x = num(SPEEDS[speedIdx], 68, 1, C_ORG); ch(88, x, 1, C_ORG); }
+  let x = 78; x = str('STEP ', x, 1, C_GRAYL); x = num(dSteps, x, 1, C_WHITE); x = str('/', x, 1, C_GRAYL); num(TOTAL, x, 1, C_WHITE);
+}
+function ynode(k) { return 65 + k; }
+function drawHUD() {
+  rect(0, 71, W, 25, C_PANEL); hline(0, 71, W, C_GRAY);
+  const y1 = 73, y2 = 79, y3 = 85, y4 = 91;
+  let x;
+  switch (dType) {
+    case EV_GRAPH:
+      x = str('THE GRAPH: ', 1, y1, C_GOLD); x = num(V, x, y1, C_WHITE); x = str(' NODES ', x, y1, C_WHITE); x = num(NE, x, y1, C_WHITE); str(' EDGES', x, y1, C_WHITE);
+      str('RED EDGES = NEGATIVE WEIGHT', 1, y2, C_PINK);
+      str('ALL PAIRS - NO START/TARGET', 1, y3, C_CYAN);
+      str(graphMode ? 'DEMO: NEG CYCLE A>B>C>A = -2' : 'NORMAL GRAPH: NO NEG CYCLE', 1, y4, graphMode ? C_RED : C_LGREEN);
+      break;
+    case EV_INIT_CELL: case EV_INIT_DONE:
+      str('INITIAL DISTANCE MATRIX', 1, y1, C_GOLD);
+      str('DIST[I][I] = 0', 1, y2, C_WHITE);
+      str('DIRECT EDGE I>J: DIST = WEIGHT', 1, y3, C_WHITE);
+      x = str('NO EDGE: ', 1, y4, C_WHITE); x = inf(x, y4, C_GRAYL); str(' (UNKNOWN YET)', x, y4, C_GRAYL);
+      break;
+    case EV_K_START:
+      x = str('INTERMEDIATE NODE K = ', 1, y1, C_GOLD); ch(ynode(dK), x, y1, C_WHITE);
+      x = str('TEST EVERY PAIR I>J VIA ', 1, y2, C_WHITE); ch(ynode(dK), x, y2, C_GOLD);
+      x = str('PATHS MAY NOW PASS THRU A-', 1, y3, C_LGREEN); ch(ynode(dAllowed), x, y3, C_LGREEN);
+      str('MIN(WITHOUT K, THROUGH K)', 1, y4, C_CYAN);
+      break;
+    case EV_CHECK: {
+      x = str('K:', 1, y1, C_GOLD); x = ch(ynode(dK), x, y1, C_WHITE);
+      x = str(' I:', x, y1, C_LBLUE); x = ch(ynode(dI), x, y1, C_WHITE);
+      x = str(' J:', x, y1, C_LGREEN); x = ch(ynode(dJ), x, y1, C_WHITE);
+      x = str('  K', x, y1, C_GRAYL); x = num(dK + 1, x, y1, C_WHITE); x = str('/', x, y1, C_GRAYL); x = num(V, x, y1, C_WHITE);
+      x = str(' I', x, y1, C_GRAYL); x = num(dI + 1, x, y1, C_WHITE); x = str('/', x, y1, C_GRAYL); x = num(V, x, y1, C_WHITE);
+      x = str(' J', x, y1, C_GRAYL); x = num(dJ + 1, x, y1, C_WHITE); x = str('/', x, y1, C_GRAYL); num(V, x, y1, C_WHITE);
+      x = str('DIST[', 1, y2, C_WHITE); x = ch(ynode(dI), x, y2, C_LBLUE); x = str('][', x, y2, C_WHITE); x = ch(ynode(dJ), x, y2, C_LGREEN);
+      x = str(']=', x, y2, C_WHITE); x = val(dCur, x, y2, C_YEL); x = str(' THRU ', x, y2, C_GRAYL); ch(ynode(dK), x, y2, C_GOLD);
+      if (dCode === 0) {
+        str('NO CONNECTION - SKIP', 1, y3, C_GRAY);
+      } else {
+        x = val(dDik, 1, y3, C_CYAN); x = str('+', x, y3, C_WHITE); x = val(dDkj, x, y3, C_LGREEN); x = str('=', x, y3, C_WHITE);
+        x = val(dCand, x, y3, C_WHITE); x = str(dCode === 2 ? ' < ' : ' >= ', x, y3, C_WHITE); x = val(dCur, x, y3, C_YEL);
+        str(dCode === 2 ? ' : UPDATE' : ' : NO UPDATE', x, y3, dCode === 2 ? C_LGREEN : C_ORG);
+      }
+      x = str('UPDATES:', 1, y4, C_GRAYL); x = num(dUpdates, x, y4, C_WHITE); x += 4;
+      if (uTimer > 0) {
+        x = ch(ynode(uI), x, y4, C_GOLD); x = ch(62, x, y4, C_GOLD); x = ch(ynode(uJ), x, y4, C_GOLD); x += 4;
+        x = num(uOld, x, y4, C_YEL); x = str('>', x, y4, C_WHITE); x = num(uNew, x, y4, C_LGREEN); x = str(' VIA ', x, y4, C_GRAYL); ch(ynode(uK), x, y4, C_GOLD);
+      } else {
+        x = str('ALLOWED MID: A-', x, y4, C_GRAYL); ch(ynode(dAllowed), x, y4, C_GRAYL);
+      }
+      break;
+    }
+    case EV_UPDATE:
+      x = str('IMPROVED ', 1, y1, C_LGREEN); x = ch(ynode(dI), x, y1, C_LBLUE); x = ch(62, x, y1, C_WHITE); x = ch(ynode(dJ), x, y1, C_LGREEN); x = str(' VIA ', x, y1, C_GRAYL); ch(ynode(dK), x, y1, C_GOLD);
+      x = str('DIST[', 1, y2, C_WHITE); x = ch(ynode(dI), x, y2, C_LBLUE); x = str('][', x, y2, C_WHITE); x = ch(ynode(dJ), x, y2, C_LGREEN); x = str(']: ', x, y2, C_WHITE);
+      x = val(uOld, x, y2, C_YEL); x = str(' -> ', x, y2, C_WHITE); num(uNew, x, y2, C_LGREEN);
+      x = str('NEXT[', 1, y3, C_WHITE); x = ch(ynode(dI), x, y3, C_LBLUE); x = str('][', x, y3, C_WHITE); x = ch(ynode(dJ), x, y3, C_LGREEN); x = str('] = ', x, y3, C_WHITE); ch(ynode(uNext), x, y3, C_GOLD);
+      x = str('UPDATES:', 1, y4, C_GRAYL); num(dUpdates, x, y4, C_WHITE);
+      break;
+    case EV_K_DONE:
+      x = str('K = ', 1, y1, C_GOLD); x = ch(ynode(dK), x, y1, C_WHITE); str(' COMPLETE', x, y1, C_WHITE);
+      str('DIST[I][J] = BEST PATH USING', 1, y2, C_WHITE);
+      x = str('ONLY A-', 1, y3, C_LGREEN); x = ch(ynode(dK), x, y3, C_LGREEN); str(' AS INTERMEDIATES', x, y3, C_LGREEN);
+      x = str('UPDATES:', 1, y4, C_GRAYL); num(dUpdates, x, y4, C_WHITE);
+      break;
+    case EV_MATRIX_DONE:
+      str('ALL K DONE: MATRIX COMPLETE', 1, y1, C_GOLD);
+      x = str('CHECKS:', 1, y2, C_WHITE); x = num(dSteps, x, y2, C_WHITE); x = str(' (V^3)  UPDATES:', x, y2, C_WHITE); num(dUpdates, x, y2, C_LGREEN);
+      str('ONE RUN = ALL PAIRS SHORTEST', 1, y3, C_CYAN);
+      str('NEXT MATRIX GIVES THE PATHS', 1, y4, C_CYAN);
+      break;
+    case EV_NC_START:
+      str('NEGATIVE CYCLE CHECK', 1, y1, C_GOLD);
+      str('IF DIST[I][I] < 0 : CYCLE', 1, y2, C_WHITE);
+      str('CHECK EVERY DIAGONAL CELL', 1, y3, C_WHITE);
+      break;
+    case EV_NC_CHECK:
+      str('NEGATIVE CYCLE CHECK', 1, y1, C_GOLD);
+      x = str('CHECKING DIST[', 1, y2, C_WHITE); x = ch(ynode(ncI), x, y2, C_WHITE); x = str('][', x, y2, C_WHITE); x = ch(ynode(ncI), x, y2, C_WHITE); x = str('] = ', x, y2, C_WHITE); num(ncVal, x, y2, ncFlag ? C_PINK : C_WHITE);
+      str(ncFlag ? 'NEGATIVE!' : 'OK: >= 0', 1, y3, ncFlag ? C_RED : C_LGREEN);
+      x = str('CHECKED ', 1, y4, C_GRAYL); x = num(ncI + 1, x, y4, C_WHITE); x = str('/', x, y4, C_GRAYL); num(V, x, y4, C_WHITE);
+      break;
+    case EV_NC_RESULT:
+      if (ncState) {
+        str('NEGATIVE CYCLE DETECTED', 1, y1, C_RED);
+        str('SOME DIST[I][I] < 0', 1, y2, C_PINK);
+        str('SHORTEST PATHS UNDEFINED', 1, y3, C_PINK);
+        str('PATH QUERIES SKIPPED', 1, y4, C_GRAYL);
+      } else {
+        str('NO NEGATIVE CYCLE', 1, y1, C_LGREEN);
+        str('ALL DIAGONAL VALUES >= 0', 1, y2, C_WHITE);
+        str('NEGATIVE EDGES ARE FINE', 1, y3, C_WHITE);
+        str('NEGATIVE CYCLES ARE NOT', 1, y4, C_GRAYL);
+      }
+      break;
+    case EV_QUERY: case EV_PATH_STEP: case EV_PATH_DONE:
+      x = str('PRECOMPUTED - ALL PAIRS', 1, y1, C_GOLD);
+      x = str('QUERY: ', 1, y2, C_WHITE); x = ch(ynode(qS), x, y2, C_LBLUE); x = ch(62, x, y2, C_WHITE); x = ch(ynode(qT), x, y2, C_LGREEN);
+      x = str('  DISTANCE: ', x, y2, C_WHITE); val(qDist, x, y2, C_YEL);
+      if (qReach) {
+        x = str('PATH: ', 1, y3, C_WHITE);
+        for (let p = 0; p < qShown; p++) { if (p > 0) x = ch(62, x, y3, C_GRAYL); x = ch(ynode(qPath[p]), x, y3, C_GOLD); }
+      } else if (dType !== EV_QUERY || evTimer < 40) str('NO PATH', 1, y3, C_RED);
+      if (dType === EV_PATH_DONE) {
+        if (qVer === 1) { x = str('VERIFIED: SUM = ', 1, y4, C_LGREEN); x = num(qSum, x, y4, C_WHITE); str(' = DIST', x, y4, C_LGREEN); }
+        else if (qVer === 2) { x = str('NO PATH: DIST = ', 1, y4, C_ORG); inf(x, y4, C_ORG); }
+        else str('VERIFY FAILED!', 1, y4, C_RED);
+      }
+      break;
+    case EV_END:
+      str(ncFlag ? 'DONE: NEGATIVE CYCLE FOUND' : 'FINAL RESULT: ALL PAIRS DONE', 1, y1, ncFlag ? C_RED : C_GOLD);
+      x = str('UPDATES:', 1, y2, C_WHITE); x = num(dUpdates, x, y2, C_LGREEN); x = str('  CHECKS:', x, y2, C_WHITE); num(dSteps, x, y2, C_WHITE);
+      str(ncFlag ? 'DIST[I][I] < 0 FOUND' : 'NO NEGATIVE CYCLE', 1, y3, ncFlag ? C_PINK : C_LGREEN);
+      str('RESTARTING...', 1, y4, C_GRAYL);
+      break;
+  }
+}
+function drawIntro() {
+  frame(0, 0, W, H, C_BLUE);
+  str('FLOYD-WARSHALL', 8, 5, C_GOLD, 2);
+  str('ALL-PAIRS SHORTEST PATHS', 16, 19, C_CYAN);
+  str('EVERY NODE IS A SOURCE (I)', 2, 30, C_LBLUE);
+  str('EVERY NODE IS A TARGET (J)', 2, 36, C_LGREEN);
+  str('EVERY NODE MAY BE THE', 2, 42, C_WHITE);
+  str('INTERMEDIATE NODE (K)', 2, 48, C_GOLD);
+  str('DIST[I][J] = MIN( DIST[I][J],', 2, 56, C_WHITE);
+  str('DIST[I][K] + DIST[K][J] )', 18, 62, C_WHITE);
+  str('FOR K, FOR I, FOR J : O(V^3)', 2, 70, C_GRAYL);
+  str(graphMode ? 'GRAPH: NEG-CYCLE DEMO' : 'GRAPH: NEG EDGES, NO NEG CYCLE', 2, 77, graphMode ? C_RED : C_LGREEN);
+  str('SPACE PAUSE  +/- SPEED  R RESET', 2, 84, C_GRAYL);
+  if ((simTicks >> 5) & 1) str('CLICK OR PRESS S FOR SOUND', 2, 90, C_GOLD);
+  else str('N: NEG CYCLE  M: MUSIC', 2, 90, C_GRAYL);
+}
+function drawCompare() {
+  frame(0, 0, W, H, C_BLUE);
+  rect(2, 2, 61, 9, C_NAVY); str('FLOYD-WARSHALL', 4, 5, C_GOLD);
+  rect(65, 2, 61, 9, C_NAVY); str('DIJKSTRA', 67, 5, C_ORG);
+  const a = ['ALL-PAIRS', 'PATHS', 'DYNAMIC PROG.', 'O(V^3)', 'NEG EDGES OK', 'DETECTS NEG', 'CYCLES', 'NO PRIORITY', 'QUEUE'];
+  const b = ['SINGLE-SOURCE', 'PATHS', 'GREEDY: PICKS', 'MIN TENTATIVE', 'DISTANCE', 'NO NEG EDGES', 'USUALLY A', 'PRIORITY QUEUE', '(NOT RUN HERE)'];
+  for (let i = 0; i < 9; i++) { str(a[i], 4, 14 + i * 6, i === 3 || i === 4 || i === 5 ? C_LGREEN : C_WHITE); str(b[i], 67, 14 + i * 6, i === 5 ? C_ORG : C_GRAYL); }
+  hline(2, 70, 124, C_GRAY);
+  str('BELLMAN-FORD: SINGLE SOURCE', 2, 74, C_GRAYL);
+  str('THIS RUN EXECUTES ONLY', 2, 81, C_WHITE);
+  str('FLOYD-WARSHALL: BEST WITHOUT K', 2, 87, C_CYAN);
+  str('VS BEST THROUGH K', 2, 93 - 1, C_CYAN);
+}
+function drawParticles() {
+  for (let n = 0; n < NP; n++) if (pLife[n] > 0) px(Math.floor(pX[n]), Math.floor(pY[n]), pCol[n]);
+}
+
+/* ===== 21. RESIZE / DISPLAY SCALING ===== */
+let scale = 4, ox = 0, oy = 0;
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  const cw = Math.floor(window.innerWidth * dpr), chh = Math.floor(window.innerHeight * dpr);
+  cv.width = cw; cv.height = chh;
+  scale = Math.max(1, Math.floor(Math.min(cw / W, chh / H)));    // largest integer scale that fits
+  ox = (cw - W * scale) >> 1; oy = (chh - H * scale) >> 1;
+}
+function present() {
+  octx.putImageData(img, 0, 0);
+  dctx.imageSmoothingEnabled = false;
+  dctx.fillStyle = PALHEX[C_BG];
+  dctx.fillRect(0, 0, cv.width, cv.height);
+  dctx.drawImage(off, 0, 0, W, H, ox, oy, W * scale, H * scale);
+}
+function render() {
+  buf.fill(PAL32[C_BG]);
+  if (dType === EV_START) drawIntro();
+  else if (dType === EV_COMPARE) drawCompare();
+  else { drawTitle(); drawGraph(); drawStrip(); drawMatrix(); drawHUD(); }
+  drawParticles();
+  present();
+}
+
+/* ===== 19. UPDATE LOOP (fixed 60Hz simulation step) ===== */
+function tick() {
+  simTicks++;
+  updateParticles();
+  for (let n = 0; n < V * V; n++) if (cellFlash[n] > 0) cellFlash[n]--;
+  if (uTimer > 0) uTimer--;
+  musicTick();
+  if (paused) return;
+  const s = SPEEDS[speedIdx];
+  for (let i = 0; i < s; i++) stepPlayback();
+}
+
+/* ===== 22. INPUT / SOUND TOGGLE ===== */
+function toggleSound() {
+  if (!AC) { initAudio(); soundOn = !!AC; }
+  else { soundOn = !soundOn; if (soundOn && AC.state === 'suspended') AC.resume(); }
+  if (soundOn) sfx(S_QUERY);
+}
+window.addEventListener('pointerdown', toggleSound);
+window.addEventListener('keydown', function (e) {
+  const k = e.key;
+  if (k === ' ') { paused = !paused; e.preventDefault(); }
+  else if (k === 's' || k === 'S') toggleSound();
+  else if (k === 'm' || k === 'M') { musicOn = !musicOn; }
+  else if (k === 'r' || k === 'R') resetAll(true);
+  else if (k === 'n' || k === 'N') { graphMode = 1 - graphMode; resetAll(true); }   // switch graph, re-run real algorithm
+  else if (k === '+' || k === '=' || k === 'ArrowUp') speedIdx = Math.min(SPEEDS.length - 1, speedIdx + 1);
+  else if (k === '-' || k === '_' || k === 'ArrowDown') speedIdx = Math.max(0, speedIdx - 1);
+});
+window.addEventListener('resize', resize);
+
+/* ===== 23. MAIN LOOP ===== */
+resize();
+resetAll(false);
+let lastTs = 0, acc = 0;
+const DT = 1000 / 60;
+function mainLoop(ts) {
+  requestAnimationFrame(mainLoop);
+  if (!lastTs) lastTs = ts;
+  let d = ts - lastTs; lastTs = ts;
+  if (d > 250) d = 250;
+  acc += d;
+  while (acc >= DT) { acc -= DT; tick(); }
+  render();
+}
+requestAnimationFrame(mainLoop);
+</script>
+</body>
+</html>

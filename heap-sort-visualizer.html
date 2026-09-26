@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HEAP SORT // 16-BIT ALGORITHM VISUALIZER</title>
+<style>
+html,body{margin:0;padding:0;width:100%;height:100%;background:#0b0b1a;overflow:hidden}
+body{display:flex;align-items:center;justify-content:center}
+#view{display:block;image-rendering:crisp-edges;image-rendering:pixelated;outline:none;-webkit-tap-highlight-color:transparent;touch-action:none}
+.sr{position:absolute;left:-9999px;top:0;width:1px;height:1px;overflow:hidden}
+</style>
+</head>
+<body>
+<canvas id="view" width="512" height="480" tabindex="0" aria-label="Heap Sort visualizer. Space starts or pauses, N steps one event, R resets, S shuffles, M toggles sound, plus and minus change speed."></canvas>
+<div class="sr" role="toolbar" aria-label="Heap Sort controls">
+<button type="button" data-act="start">Start</button>
+<button type="button" data-act="pause">Pause</button>
+<button type="button" data-act="step">Step</button>
+<button type="button" data-act="reset">Reset</button>
+<button type="button" data-act="shuffle">Shuffle</button>
+<button type="button" data-act="sound">Sound</button>
+<button type="button" data-act="speed">Speed</button>
+</div>
+<script>
+'use strict';
+/* =====================================================================
+   HEAP SORT // 16-BIT ALGORITHM VISUALIZER
+   Five layers:
+     1. ALGORITHM  - heapSortGen(): the real in-place max-heap sort, written as a
+                     generator that pauses at every meaningful operation
+     2. EVENTS     - one reusable event object per pause (SORT_START ... SORT_COMPLETE)
+     3. ANIMATION  - tweens, flashes, particles; reads events, never decides outcomes
+     4. RENDERING  - reads algorithm + animation state, never mutates algorithm state
+     5. AUDIO      - Web Audio blips driven by events, never drives the algorithm
+   ===================================================================== */
+
+/* ---------------------------------------------------------------- CONFIG */
+const LW = 128, LH = 96, CH = 24;               // logical scene size + control strip
+const N = 10;
+const INITIAL = [27, 8, 35, 14, 42, 19, 5, 31, 11, 23];
+const MAXV = Math.max.apply(null, INITIAL);
+const SEED0 = 0x5EED1234;
+const BASE_Y = 59, MAX_H = 9, IDX_Y = 61, BRK_Y = 67;
+
+/* 24-colour NES-flavoured palette */
+const PAL = ['#0b0b1a', '#151530', '#23234d', '#3a3a78', '#5b5bb0', '#8f8fdc', '#ffffff', '#c8c8e8',
+             '#7c7c9c', '#ff4d4d', '#a01e2e', '#ffb347', '#ffe14a', '#a67c00', '#56e07a', '#1f8f4a',
+             '#4ad8ff', '#1e7fb0', '#6a8cff', '#283f9e', '#d67cff', '#7a3a9e', '#ff9ec7', '#3d2a1e'];
+const K = { VOID: 0, PANEL: 1, PANEL2: 2, LINE: 3, DIM: 4, LIGHT: 5, WHITE: 6, TEXT: 7, GRAY: 8,
+            RED: 9, DRED: 10, ORANGE: 11, YELLOW: 12, DYELLOW: 13, GREEN: 14, DGREEN: 15,
+            CYAN: 16, DCYAN: 17, BLUE: 18, DBLUE: 19, MAGENTA: 20, PURPLE: 21, PINK: 22, BROWN: 23 };
+
+/* ------------------------------------------------------- 3x5 PIXEL FONT */
+const GLYPH_SRC = {
+  'A': '010101111101101', 'B': '110101110101110', 'C': '011100100100011', 'D': '110101101101110',
+  'E': '111100110100111', 'F': '111100110100100', 'G': '011100101101011', 'H': '101101111101101',
+  'I': '111010010010111', 'J': '001001001101010', 'K': '101101110101101', 'L': '100100100100111',
+  'M': '101111111101101', 'N': '111101101101101', 'O': '010101101101010', 'P': '110101110100100',
+  'Q': '010101101111011', 'R': '110101110101101', 'S': '011100010001110', 'T': '111010010010010',
+  'U': '101101101101111', 'V': '101101101101010', 'W': '101101111111101', 'X': '101101010101101',
+  'Y': '101101010010010', 'Z': '111001010100111',
+  '0': '111101101101111', '1': '010110010010111', '2': '111001111100111', '3': '111001111001111',
+  '4': '101101111001001', '5': '111100111001111', '6': '111100111101111', '7': '111001010010010',
+  '8': '111101111101111', '9': '111101111001111',
+  ' ': '000000000000000', '.': '000000000000010', ':': '000010000010000', '-': '000000111000000',
+  '+': '000010111010000', '<': '001010100010001', '>': '100010001010100', '=': '000111000111000',
+  '(': '010100100100010', ')': '010001001001010', '/': '001001010100100', '^': '010101000000000',
+  '!': '010010010000010', ',': '000000000010100', '?': '110001010000010', '[': '110100100100110',
+  ']': '011001001001011', '_': '000000000000111', '*': '101010111010101', "'": '010010000000000',
+  '}': '100010001000111',   /* >= */
+  '{': '001010100000111',   /* <= */
+  '@': '010001111001010'    /* right arrow */
+};
+const GL = new Array(128).fill(null);
+(function buildFont() {
+  for (const k in GLYPH_SRC) {
+    const s = GLYPH_SRC[k], rows = [];
+    for (let r = 0; r < 5; r++) rows.push(parseInt(s.substr(r * 3, 3), 2));
+    GL[k.charCodeAt(0)] = rows;
+  }
+})();
+
+/* ------------------------------------------------- DRAWING PRIMITIVES */
+let G = null, curCol = -1;
+function use(ctx) { G = ctx; curCol = -1; }
+function col(c) { if (c !== curCol) { G.fillStyle = PAL[c]; curCol = c; } }
+function px(x, y, c) { col(c); G.fillRect(x, y, 1, 1); }
+function rect(x, y, w, h, c) { col(c); G.fillRect(x, y, w, h); }
+function hl(x0, x1, y, c) { if (x1 < x0) { const t = x0; x0 = x1; x1 = t; } col(c); G.fillRect(x0, y, x1 - x0 + 1, 1); }
+function vl(x, y0, y1, c) { col(c); G.fillRect(x, y0, 1, y1 - y0 + 1); }
+function box(x, y, w, h, c) { hl(x, x + w - 1, y, c); hl(x, x + w - 1, y + h - 1, c); vl(x, y, y + h - 1, c); vl(x + w - 1, y, y + h - 1, c); }
+function glyph(gl, x, y) {
+  for (let r = 0; r < 5; r++) {
+    const b = gl[r];
+    if (b) {
+      if (b & 4) G.fillRect(x, y + r, 1, 1);
+      if (b & 2) G.fillRect(x + 1, y + r, 1, 1);
+      if (b & 1) G.fillRect(x + 2, y + r, 1, 1);
+    }
+  }
+}
+function text(s, x, y, c) {
+  col(c);
+  for (let i = 0; i < s.length; i++) {
+    const gl = GL[s.charCodeAt(i)];
+    if (gl) glyph(gl, x, y);
+    x += 4;
+  }
+  return x;
+}
+function numW(n) { return n >= 100 ? 11 : n >= 10 ? 7 : 3; }
+function num(n, x, y, c) {
+  col(c);
+  if (n >= 100) { glyph(GL[48 + (((n / 100) | 0) % 10)], x, y); x += 4; }
+  if (n >= 10) { glyph(GL[48 + (((n / 10) | 0) % 10)], x, y); x += 4; }
+  glyph(GL[48 + (n % 10)], x, y);
+  return x + 4;
+}
+function dotted(x0, y0, x1, y1, c, phase) {
+  const dx = x1 - x0, dy = y1 - y0, n = Math.max(Math.abs(dx), Math.abs(dy));
+  if (n === 0) { px(x0, y0, c); return; }
+  for (let s = 0; s <= n; s++) {
+    if (((s + phase) & 3) < 2) px(x0 + Math.round(dx * s / n), y0 + Math.round(dy * s / n), c);
+  }
+}
+
+/* --------------------------------------------------------- GEOMETRY */
+const TX = new Int16Array(N), TY = new Int16Array(N), BXC = new Int16Array(N);
+(function buildGeometry() {
+  for (let i = 0; i < N; i++) {
+    const lv = 31 - Math.clz32(i + 1), k = i - ((1 << lv) - 1);
+    TX[i] = 8 + (((2 * k + 1) * 112) >> (lv + 1));   // tree slot centre, derived from index (keeps corners clear)
+    TY[i] = 8 + lv * 10;
+    BXC[i] = 9 + 12 * i;                      // bar centre
+  }
+})();
+function barH(v) { return Math.max(1, Math.round(v * MAX_H / MAXV)); }
+
+/* ====================================================================
+   1. ALGORITHM LAYER
+   ==================================================================== */
+const E = { SORT_START: 1, BUILD_HEAP_START: 2, HEAP_NODE_SELECTED: 3, SIFT_DOWN_START: 4,
+  COMPARE_PARENT_LEFT: 5, COMPARE_PARENT_RIGHT: 6, LARGER_CHILD_SELECTED: 7, HEAP_VIOLATION: 8,
+  SWAP_START: 9, SWAP_PROGRESS: 10, SWAP_COMPLETE: 11, SIFT_DOWN_CONTINUE: 12, SIFT_DOWN_COMPLETE: 13,
+  MAX_HEAP_READY: 14, EXTRACT_MAX_START: 15, ROOT_END_SWAP: 16, ELEMENT_LOCKED: 17,
+  HEAP_SIZE_CHANGED: 18, HEAP_RESTORED: 19, SORT_COMPLETE: 20, RESET: 21 };
+
+const S = {                       // the one and only algorithm state
+  arr: new Int16Array(N), n: N,
+  phase: 0,                       // 0 idle, 1 build max heap, 2 extract max, 3 done
+  heapSize: N, sortedStart: N,    // active heap = [0, heapSize), sorted suffix = [sortedStart, n)
+  buildIdx: -1, endIdx: -1,
+  root: -1, left: -1, right: -1, largest: -1,
+  cmpA: -1, cmpB: -1, cmpRes: false,
+  sifting: false, violation: false,
+  swapA: -1, swapB: -1,
+  comparisons: 0, swaps: 0, curMax: -1, done: false, evt: 0
+};
+const EV = { type: 0, a: 0 };     // reused event object
+function ev(type, a) { EV.type = type; EV.a = a === undefined ? -1 : a; S.evt = type; return EV; }
+function swapAt(a, i, j) { const t = a[i]; a[i] = a[j]; a[j] = t; }
+
+/* Real Heap Sort, structured as a generator so every operation can be observed.
+   Behaviour is identical to:
+     for (i = n/2-1; i >= 0; i--) siftDown(a, i, n);
+     for (end = n-1; end > 0; end--) { swap(a, 0, end); siftDown(a, 0, end); }        */
+function* heapSortGen() {
+  const a = S.arr, n = S.n;
+  yield ev(E.SORT_START);
+  S.phase = 1;
+  yield ev(E.BUILD_HEAP_START);
+  for (let i = Math.floor(n / 2) - 1; i >= 0; i--) {         // leaves are never sifted
+    S.buildIdx = i; S.root = i; S.sifting = true; S.largest = -1;
+    S.left = 2 * i + 1 < S.heapSize ? 2 * i + 1 : -1;
+    S.right = 2 * i + 2 < S.heapSize ? 2 * i + 2 : -1;
+    yield ev(E.HEAP_NODE_SELECTED, i);
+    yield* siftDown(i, n);
+  }
+  S.buildIdx = -1; S.sifting = false; S.root = S.left = S.right = S.largest = -1;
+  yield ev(E.MAX_HEAP_READY);
+  for (let end = n - 1; end > 0; end--) {
+    S.phase = 2; S.endIdx = end; S.curMax = a[0];
+    yield ev(E.EXTRACT_MAX_START, end);
+    swapAt(a, 0, end); S.swaps++; S.swapA = 0; S.swapB = end;   // root (the maximum) -> end of active heap
+    yield ev(E.ROOT_END_SWAP, end);
+    S.sortedStart = end;                                         // that position is now permanently sorted
+    yield ev(E.ELEMENT_LOCKED, end);
+    S.heapSize = end;                                            // heap shrinks by one
+    yield ev(E.HEAP_SIZE_CHANGED, end);
+    yield* siftDown(0, end);
+  }
+  S.endIdx = -1; S.sifting = false; S.root = S.left = S.right = S.largest = -1;
+  S.sortedStart = 0; S.heapSize = 0; S.done = true; S.phase = 3;  // last remaining element is already in place
+  yield ev(E.ELEMENT_LOCKED, 0);
+  yield ev(E.SORT_COMPLETE);
+}
+
+function* siftDown(root, heapSize) {
+  const a = S.arr;
+  S.sifting = true; S.root = root; S.violation = false; S.largest = -1; S.cmpA = S.cmpB = -1;
+  S.left = root * 2 + 1 < heapSize ? root * 2 + 1 : -1;
+  S.right = root * 2 + 2 < heapSize ? root * 2 + 2 : -1;
+  yield ev(E.SIFT_DOWN_START, root);
+  while (true) {
+    const left = root * 2 + 1, right = root * 2 + 2;
+    let largest = root;
+    S.root = root; S.left = left < heapSize ? left : -1; S.right = right < heapSize ? right : -1;
+    S.largest = -1; S.cmpA = S.cmpB = -1; S.violation = false;
+    if (left < heapSize) {                                       // never look outside the active heap
+      S.comparisons++; S.cmpA = largest; S.cmpB = left; S.cmpRes = a[left] > a[largest];
+      yield ev(E.COMPARE_PARENT_LEFT, left);
+      if (a[left] > a[largest]) largest = left;
+    }
+    if (right < heapSize) {
+      S.comparisons++; S.cmpA = largest; S.cmpB = right; S.cmpRes = a[right] > a[largest];
+      yield ev(E.COMPARE_PARENT_RIGHT, right);
+      if (a[right] > a[largest]) largest = right;
+    }
+    S.cmpA = S.cmpB = -1;
+    if (left < heapSize) { S.largest = largest; yield ev(E.LARGER_CHILD_SELECTED, largest); }
+    if (largest === root) break;
+    S.violation = true;
+    yield ev(E.HEAP_VIOLATION, largest);
+    S.violation = false;
+    swapAt(a, root, largest); S.swaps++; S.swapA = root; S.swapB = largest;
+    yield ev(E.SWAP_START, largest);
+    yield ev(E.SWAP_COMPLETE, largest);
+    root = largest;
+    S.root = root; S.largest = -1;
+    S.left = root * 2 + 1 < heapSize ? root * 2 + 1 : -1;
+    S.right = root * 2 + 2 < heapSize ? root * 2 + 2 : -1;
+    yield ev(E.SIFT_DOWN_CONTINUE, root);
+  }
+  yield ev(E.SIFT_DOWN_COMPLETE, root);
+  S.sifting = false;
+  yield ev(E.HEAP_RESTORED, root);
+  S.root = S.left = S.right = S.largest = -1;
+}
+
+/* --------------------- seeded PRNG + deterministic shuffle (reference sort) */
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+/* The exact reference algorithm from the spec; only used to make sure a shuffle
+   produces an instructive run (several build-phase swaps). */
+function refHeapStats(array) {
+  const st = { buildSwaps: 0, swaps: 0 };
+  function sw(arr, i, j) { const t = arr[i]; arr[i] = arr[j]; arr[j] = t; st.swaps++; }
+  function sift(arr, root, heapSize) {
+    while (true) {
+      const left = root * 2 + 1, right = root * 2 + 2;
+      let largest = root;
+      if (left < heapSize && arr[left] > arr[largest]) largest = left;
+      if (right < heapSize && arr[right] > arr[largest]) largest = right;
+      if (largest === root) break;
+      sw(arr, root, largest);
+      root = largest;
+    }
+  }
+  const len = array.length;
+  for (let i = Math.floor(len / 2) - 1; i >= 0; i--) sift(array, i, len);
+  st.buildSwaps = st.swaps;
+  for (let end = len - 1; end > 0; end--) { sw(array, 0, end); sift(array, 0, end); }
+  return st;
+}
+let shuffleCount = 0;
+function makeShuffle(k) {
+  const rnd = mulberry32((SEED0 + Math.imul(k, 0x9E3779B1)) >>> 0);
+  for (let tries = 0; tries < 64; tries++) {
+    const a = INITIAL.slice();
+    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); const t = a[i]; a[i] = a[j]; a[j] = t; }
+    const st = refHeapStats(a.slice());
+    let same = true;
+    for (let i = 0; i < N; i++) if (a[i] !== INITIAL[i]) same = false;
+    if (!same && st.buildSwaps >= 4 && st.swaps >= 14) return a;
+  }
+  return INITIAL.slice();
+}
+
+/* ====================================================================
+   RUN STATE (transport controls only - never alters the algorithm)
+   ==================================================================== */
+const M_IDLE = 0, M_RUN = 1, M_PAUSE = 2, M_DONE = 3;
+let mode = M_IDLE, gen = null, wait = 0, stepping = false;
+let pageT = 0, pageBase = 0;
+const SPEEDS = [0.5, 1, 2, 4], SPEED_LBL = ['.5X', '1X', '2X', '4X'];
+let speedIdx = 1;
+
+/* event pacing, in 60 Hz ticks */
+const DUR = new Int16Array(24);
+DUR[E.SORT_START] = 60; DUR[E.BUILD_HEAP_START] = 70; DUR[E.HEAP_NODE_SELECTED] = 60;
+DUR[E.SIFT_DOWN_START] = 46; DUR[E.COMPARE_PARENT_LEFT] = 58; DUR[E.COMPARE_PARENT_RIGHT] = 58;
+DUR[E.LARGER_CHILD_SELECTED] = 54; DUR[E.HEAP_VIOLATION] = 50; DUR[E.SWAP_START] = 62;
+DUR[E.SWAP_COMPLETE] = 34; DUR[E.SIFT_DOWN_CONTINUE] = 34; DUR[E.SIFT_DOWN_COMPLETE] = 44;
+DUR[E.MAX_HEAP_READY] = 90; DUR[E.EXTRACT_MAX_START] = 72; DUR[E.ROOT_END_SWAP] = 84;
+DUR[E.ELEMENT_LOCKED] = 66; DUR[E.HEAP_SIZE_CHANGED] = 60; DUR[E.HEAP_RESTORED] = 62;
+DUR[E.SORT_COMPLETE] = 30;
+
+/* ====================================================================
+   3. ANIMATION LAYER
+   ==================================================================== */
+const A = {
+  swapActive: false, swapT: 0, swapDur: 1, swapI: -1, swapJ: -1, swapHalf: false,
+  flash: new Uint8Array(N), flashC: new Uint8Array(N),
+  restoreT: 0, sizeFlash: 0, evAge: 0, pulse: 0
+};
+const PN = 64;
+const PXa = new Float32Array(PN), PYa = new Float32Array(PN), PVX = new Float32Array(PN), PVY = new Float32Array(PN);
+const PLf = new Uint8Array(PN), PCo = new Uint8Array(PN);
+let fx = mulberry32(0xC0FFEE);              // cosmetic-only PRNG (particles)
+
+function burst(x, y, c, cnt) {
+  for (let k = 0; k < cnt; k++) {
+    let s = -1;
+    for (let i = 0; i < PN; i++) if (PLf[i] === 0) { s = i; break; }
+    if (s < 0) return;
+    const ang = fx() * 6.2832, sp = 0.35 + fx() * 0.9;
+    PXa[s] = x; PYa[s] = y; PVX[s] = Math.cos(ang) * sp; PVY[s] = Math.sin(ang) * sp - 0.55;
+    PLf[s] = 16 + ((fx() * 14) | 0); PCo[s] = c;
+  }
+}
+function setFlash(i, c, t) { if (i >= 0 && i < N) { A.flash[i] = t; A.flashC[i] = c; } }
+function startSwap(i, j, dur) { A.swapActive = true; A.swapT = 0; A.swapDur = dur; A.swapI = i; A.swapJ = j; A.swapHalf = false; }
+function finishAnim() { if (A.swapActive) { A.swapT = A.swapDur; A.swapActive = false; } }
+function tweenFrom(i) { return A.swapActive ? (i === A.swapI ? A.swapJ : i === A.swapJ ? A.swapI : -1) : -1; }
+function ease(t) { t = t < 0 ? 0 : t > 1 ? 1 : t; return t * t * (3 - 2 * t); }
+
+function animEvent(e) {
+  switch (e.type) {
+    case E.HEAP_NODE_SELECTED: case E.SIFT_DOWN_START: case E.SIFT_DOWN_CONTINUE: setFlash(S.root, K.YELLOW, 26); break;
+    case E.COMPARE_PARENT_LEFT: case E.COMPARE_PARENT_RIGHT: setFlash(S.cmpA, K.WHITE, 30); setFlash(S.cmpB, K.WHITE, 30); break;
+    case E.LARGER_CHILD_SELECTED: setFlash(S.largest, K.GREEN, 30); break;
+    case E.HEAP_VIOLATION: setFlash(S.root, K.RED, 34); setFlash(S.largest, K.RED, 34); break;
+    case E.SWAP_START: startSwap(S.swapA, S.swapB, 44); break;
+    case E.ROOT_END_SWAP: startSwap(S.swapA, S.swapB, 64); break;
+    case E.SWAP_COMPLETE: setFlash(S.swapA, K.GREEN, 24); setFlash(S.swapB, K.GREEN, 24); break;
+    case E.HEAP_RESTORED: A.restoreT = 46; break;
+    case E.MAX_HEAP_READY: A.restoreT = 64; setFlash(0, K.ORANGE, 44); break;
+    case E.EXTRACT_MAX_START: setFlash(0, K.ORANGE, 40); setFlash(e.a, K.ORANGE, 40); break;
+    case E.ELEMENT_LOCKED: {
+      const i = e.a, top = BASE_Y - barH(S.arr[i]);
+      burst(BXC[i], top, K.GREEN, 7); burst(BXC[i], top, K.YELLOW, 4);
+      if (!S.done) burst(TX[i], TY[i] + 3, K.GREEN, 5);
+      setFlash(i, K.WHITE, 30);
+      break;
+    }
+    case E.HEAP_SIZE_CHANGED: A.sizeFlash = 32; break;
+    case E.SORT_COMPLETE:
+      for (let i = 0; i < N; i++) burst(BXC[i], BASE_Y - barH(S.arr[i]), i & 1 ? K.YELLOW : K.GREEN, 3);
+      break;
+  }
+}
+function updateAnim() {
+  if (A.swapActive) {
+    A.swapT++;
+    if (!A.swapHalf && A.swapT * 2 >= A.swapDur) { A.swapHalf = true; audioEvent(E.SWAP_PROGRESS); }
+    if (A.swapT >= A.swapDur) A.swapActive = false;
+  }
+  for (let i = 0; i < N; i++) if (A.flash[i] > 0) A.flash[i]--;
+  if (A.restoreT > 0) A.restoreT--;
+  if (A.sizeFlash > 0) A.sizeFlash--;
+  A.evAge++;
+  for (let i = 0; i < PN; i++) {
+    if (PLf[i] > 0) { PXa[i] += PVX[i]; PYa[i] += PVY[i]; PVY[i] += 0.06; PLf[i]--; }
+  }
+}
+
+/* ====================================================================
+   5. AUDIO LAYER (Web Audio, procedural, no files)
+   ==================================================================== */
+let actx = null, master = null, noiseBuf = null, soundOn = true;
+function ensureAudio() {
+  try {
+    if (!actx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      actx = new AC();
+      master = actx.createGain(); master.gain.value = 0.16; master.connect(actx.destination);
+      const len = actx.sampleRate >> 1;
+      noiseBuf = actx.createBuffer(1, len, actx.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      let s = 12345;
+      for (let i = 0; i < len; i++) { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; d[i] = (s / 4294967296) * 2 - 1; }
+    }
+    if (actx.state === 'suspended') actx.resume();
+  } catch (err) { /* audio is optional */ }
+}
+function tone(type, f0, f1, dur, vol, delay) {
+  if (!actx || !soundOn) return;
+  const t = actx.currentTime + (delay || 0);
+  const o = actx.createOscillator(), gn = actx.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(f0, t);
+  if (f1 !== f0) o.frequency.linearRampToValueAtTime(f1, t + dur);
+  gn.gain.setValueAtTime(0.0001, t);
+  gn.gain.linearRampToValueAtTime(vol, t + 0.006);
+  gn.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(gn); gn.connect(master);
+  o.start(t); o.stop(t + dur + 0.03);
+}
+function noise(dur, vol, delay, hp) {
+  if (!actx || !soundOn || !noiseBuf) return;
+  const t = actx.currentTime + (delay || 0);
+  const src = actx.createBufferSource(), gn = actx.createGain(), f = actx.createBiquadFilter();
+  src.buffer = noiseBuf; f.type = 'highpass'; f.frequency.value = hp || 2000;
+  gn.gain.setValueAtTime(vol, t); gn.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  src.connect(f); f.connect(gn); gn.connect(master);
+  src.start(t); src.stop(t + dur + 0.03);
+}
+function audioEvent(t) {
+  if (!actx || !soundOn) return;
+  switch (t) {
+    case E.SORT_START: tone('square', 392, 392, 0.08, 0.5); tone('square', 523, 523, 0.1, 0.5, 0.09); break;
+    case E.BUILD_HEAP_START: tone('triangle', 262, 262, 0.12, 0.9); tone('triangle', 330, 330, 0.12, 0.9, 0.12); tone('triangle', 392, 392, 0.16, 0.9, 0.24); break;
+    case E.HEAP_NODE_SELECTED: tone('square', 660, 660, 0.06, 0.4); break;                  // short blip
+    case E.SIFT_DOWN_START: tone('square', 523, 523, 0.05, 0.3); break;
+    case E.COMPARE_PARENT_LEFT: case E.COMPARE_PARENT_RIGHT: tone('square', 1400, 1400, 0.02, 0.12); noise(0.015, 0.05, 0, 4000); break; // tiny click
+    case E.LARGER_CHILD_SELECTED: tone('square', 784, 1047, 0.09, 0.32); break;              // slightly higher tone
+    case E.HEAP_VIOLATION: tone('square', 110, 92, 0.16, 0.5); break;                        // low short tone
+    case E.SWAP_START: tone('triangle', 392, 392, 0.07, 0.8); break;                         // two-tone movement, part 1
+    case E.SWAP_PROGRESS: tone('triangle', 587, 587, 0.08, 0.8); break;                      // part 2 (mid-tween)
+    case E.SWAP_COMPLETE: noise(0.03, 0.12, 0, 1500); break;
+    case E.SIFT_DOWN_CONTINUE: tone('square', 500, 500, 0.03, 0.2); break;
+    case E.SIFT_DOWN_COMPLETE: tone('triangle', 330, 330, 0.06, 0.6); break;
+    case E.HEAP_RESTORED: tone('square', 523, 523, 0.07, 0.35); tone('square', 784, 784, 0.1, 0.35, 0.08); break; // ascending pair
+    case E.MAX_HEAP_READY: tone('square', 523, 523, 0.08, 0.4); tone('square', 659, 659, 0.08, 0.4, 0.09); tone('square', 784, 784, 0.14, 0.4, 0.18); break;
+    case E.EXTRACT_MAX_START: tone('square', 196, 294, 0.18, 0.5); tone('triangle', 98, 147, 0.18, 0.9); break; // strong confirmation
+    case E.ROOT_END_SWAP: tone('triangle', 294, 294, 0.1, 0.9); tone('triangle', 440, 440, 0.12, 0.9, 0.3); break;
+    case E.ELEMENT_LOCKED: tone('square', 1319, 1319, 0.09, 0.38); noise(0.05, 0.08, 0, 5000); break; // short high tone
+    case E.HEAP_SIZE_CHANGED: tone('square', 440, 330, 0.09, 0.28); break;
+    case E.SORT_COMPLETE: {
+      const notes = [523.25, 659.25, 783.99, 1046.5, 783.99, 1046.5];
+      for (let i = 0; i < notes.length; i++) tone('square', notes[i], notes[i], i === notes.length - 1 ? 0.3 : 0.09, 0.4, i * 0.1);
+      break;
+    }
+  }
+}
+
+/* ====================================================================
+   EDUCATIONAL MESSAGES (derived from the current event + real state)
+   ==================================================================== */
+const U = { m1: '', c1: K.TEXT, m2: '', c2: K.GRAY };
+function msg(t1, c1, t2, c2) { U.m1 = t1; U.c1 = c1; U.m2 = t2; U.c2 = c2; }
+function uiEvent(e) {
+  const a = S.arr;
+  let p, c, side;
+  switch (e.type) {
+    case E.RESET: msg('PRESS START OR STEP', K.CYAN, 'WATCH THE ARRAY BECOME A HEAP', K.GRAY); break;
+    case E.SORT_START: msg('ARRAY = COMPLETE BINARY TREE', K.YELLOW, 'ONE ARRAY, TWO VIEWS', K.GRAY); break;
+    case E.BUILD_HEAP_START: msg('PHASE 1: BUILD MAX HEAP', K.CYAN, 'BUILD FROM THE BOTTOM UP', K.GRAY); break;
+    case E.HEAP_NODE_SELECTED: msg('SIFT DOWN NODE ' + e.a, K.YELLOW, 'LEAVES ALREADY SATISFY THE RULE', K.GRAY); break;
+    case E.SIFT_DOWN_START:
+      if (S.left < 0) msg('NODE ' + S.root + ' HAS NO CHILD IN HEAP', K.YELLOW, 'NOTHING TO COMPARE', K.GRAY);
+      else msg('SIFT DOWN ' + a[S.root] + ' FROM NODE ' + S.root, K.YELLOW, 'COMPARE IT WITH ITS CHILDREN', K.GRAY);
+      break;
+    case E.COMPARE_PARENT_LEFT:
+      msg('LEFT ' + a[S.cmpB] + (S.cmpRes ? ' > ' : ' { ') + 'PARENT ' + a[S.cmpA], K.YELLOW,
+          S.right < 0 ? 'RIGHT CHILD: NONE. ONLY LEFT.' : 'MAX HEAP: PARENT } CHILDREN', K.GRAY);
+      break;
+    case E.COMPARE_PARENT_RIGHT:
+      if (S.cmpA === S.left) msg('RIGHT ' + a[S.cmpB] + (S.cmpRes ? ' > ' : ' { ') + 'LEFT ' + a[S.cmpA], K.YELLOW, 'COMPARE THE TWO CHILDREN', K.GRAY);
+      else msg('RIGHT ' + a[S.cmpB] + (S.cmpRes ? ' > ' : ' { ') + 'PARENT ' + a[S.cmpA], K.YELLOW, 'LEFT DID NOT BEAT THE PARENT', K.GRAY);
+      break;
+    case E.LARGER_CHILD_SELECTED:
+      if (S.largest !== S.root) {
+        side = S.largest === S.left ? 'LEFT ' : 'RIGHT ';
+        msg('LARGEST CHILD: ' + side + a[S.largest], K.GREEN, 'LARGER CHILD WINS IN MAX HEAP', K.GRAY);
+      } else msg('PARENT ' + a[S.root] + ' IS THE LARGEST', K.GREEN, 'NO SWAP NEEDED', K.GRAY);
+      break;
+    case E.HEAP_VIOLATION: msg(a[S.root] + ' < ' + a[S.largest] + '  HEAP VIOLATION', K.RED, 'PARENT SMALLER THAN ITS CHILD', K.GRAY); break;
+    case E.SWAP_START: msg('SWAP ' + a[S.swapB] + ' WITH ' + a[S.swapA], K.YELLOW, 'LARGER CHILD MOVES UP', K.GRAY); break;
+    case E.SWAP_COMPLETE: msg(a[S.swapA] + ' IS NOW THE PARENT', K.GREEN, a[S.swapB] + ' SINKS ONE LEVEL DOWN', K.GRAY); break;
+    case E.SIFT_DOWN_CONTINUE: msg('KEEP SIFTING ' + a[S.root] + ' FROM NODE ' + S.root, K.YELLOW, 'IT MAY STILL BE TOO SMALL', K.GRAY); break;
+    case E.SIFT_DOWN_COMPLETE:
+      if (S.left >= 0) msg('PARENT ' + a[S.root] + ' } ALL CHILDREN', K.GREEN, 'SIFT DOWN STOPS HERE', K.GRAY);
+      else msg(a[S.root] + ' HAS NO CHILDREN LEFT', K.GREEN, 'SIFT DOWN STOPS HERE', K.GRAY);
+      break;
+    case E.HEAP_RESTORED:
+      if (S.left >= 0) {
+        p = a[S.root]; c = a[S.left];
+        if (S.right >= 0 && a[S.right] > c) c = a[S.right];
+        msg(p + ' } ' + c + ' HEAP PROPERTY RESTORED', K.GREEN, S.phase === 1 ? 'BUILD CONTINUES UPWARD' : 'SIFT DOWN RESTORED THE MAX HEAP', K.GRAY);
+      } else msg('HEAP PROPERTY RESTORED', K.GREEN, S.phase === 1 ? 'BUILD CONTINUES UPWARD' : 'SIFT DOWN RESTORED THE MAX HEAP', K.GRAY);
+      break;
+    case E.MAX_HEAP_READY: msg('MAX HEAP READY  ROOT = ' + a[0], K.YELLOW, 'ROOT HOLDS THE LARGEST VALUE', K.GRAY); break;
+    case E.EXTRACT_MAX_START: msg('PHASE 2: EXTRACT MAX', K.ORANGE, 'ROOT ' + S.curMax + ' IS THE LARGEST VALUE', K.GRAY); break;
+    case E.ROOT_END_SWAP: msg('SWAP ROOT ' + S.curMax + ' WITH END ' + a[0], K.ORANGE, 'MAX MOVES TO END OF THE HEAP', K.GRAY); break;
+    case E.ELEMENT_LOCKED:
+      msg(a[e.a] + ' SORTED', K.GREEN, S.done ? 'LAST ELEMENT IS ALREADY IN PLACE' : 'THIS POSITION IS NOW FINAL', K.GRAY);
+      break;
+    case E.HEAP_SIZE_CHANGED: msg('HEAP SIZE: ' + (S.heapSize + 1) + ' @ ' + S.heapSize, K.CYAN, 'SORTED SUFFIX IS EXCLUDED', K.GRAY); break;
+    case E.SORT_COMPLETE: msg('SORTED! ALL ' + S.n + ' ELEMENTS LOCKED', K.GREEN, 'ASCENDING ORDER, IN PLACE', K.GRAY); break;
+  }
+}
+
+/* ====================================================================
+   EVENT DISPATCH
+   ==================================================================== */
+function dispatch(e) {
+  wait = DUR[e.type] || 30;
+  A.evAge = 0;
+  animEvent(e);
+  audioEvent(e.type);
+  uiEvent(e);
+  if (e.type === E.SORT_COMPLETE) { mode = M_DONE; stepping = false; pageT = 0; pageBase = 0; }
+}
+function pull() {
+  if (!gen) gen = heapSortGen();
+  const r = gen.next();
+  if (r.done) { mode = M_DONE; return; }
+  dispatch(r.value);
+}
+function tick() {
+  if (mode === M_DONE) { updateAnim(); pageT++; return; }
+  if (mode === M_PAUSE && !stepping) return;                 // PAUSE freezes everything
+  A.pulse++;
+  updateAnim();
+  if (mode === M_RUN) { if (--wait <= 0) pull(); }
+  else if (mode === M_PAUSE) { if (--wait <= 0) stepping = false; }
+}
+
+/* ====================================================================
+   TRANSPORT ACTIONS
+   ==================================================================== */
+function resetAll(data) {
+  for (let i = 0; i < N; i++) S.arr[i] = data[i];
+  S.phase = 0; S.heapSize = N; S.sortedStart = N; S.buildIdx = -1; S.endIdx = -1;
+  S.root = S.left = S.right = S.largest = -1; S.cmpA = S.cmpB = -1; S.cmpRes = false;
+  S.sifting = false; S.violation = false; S.swapA = S.swapB = -1;
+  S.comparisons = 0; S.swaps = 0; S.curMax = -1; S.done = false;
+  gen = null; mode = M_IDLE; wait = 0; stepping = false; pageT = 0; pageBase = 0;
+  A.swapActive = false; A.swapT = 0; A.flash.fill(0); A.restoreT = 0; A.sizeFlash = 0; A.evAge = 0; A.pulse = 0;
+  PLf.fill(0); fx = mulberry32(0xC0FFEE);
+  const r = { type: E.RESET, a: -1 };
+  S.evt = E.RESET; uiEvent(r);
+}
+function doStart() {
+  if (mode === M_IDLE) { mode = M_RUN; wait = 0; }
+  else if (mode === M_PAUSE) { mode = M_RUN; stepping = false; }
+}
+function doPause() { if (mode === M_RUN) { mode = M_PAUSE; stepping = false; } }
+function doStep() {
+  if (mode === M_DONE) { pageBase++; pageT = 0; return; }
+  finishAnim();
+  if (mode === M_IDLE || mode === M_RUN) mode = M_PAUSE;
+  pull();                                                     // exactly one algorithm event
+  if (mode === M_PAUSE) stepping = true;                      // let that event's animation play out
+}
+function doReset() { shuffleCount = 0; resetAll(INITIAL); }
+function doShuffle() { shuffleCount++; resetAll(makeShuffle(shuffleCount)); }
+function toggleSound() { soundOn = !soundOn; if (soundOn) tone('square', 880, 880, 0.06, 0.4); }
+function cycleSpeed() { speedIdx = (speedIdx + 1) % SPEEDS.length; }
+function act(name) {
+  ensureAudio();
+  switch (name) {
+    case 'start': doStart(); break;
+    case 'pause': doPause(); break;
+    case 'step': doStep(); break;
+    case 'reset': doReset(); break;
+    case 'shuffle': doShuffle(); break;
+    case 'sound': toggleSound(); break;
+    case 'speed': cycleSpeed(); break;
+  }
+}
+
+/* ====================================================================
+   4. RENDERING LAYER  (reads S, A, U, mode - mutates none of the algorithm state)
+   ==================================================================== */
+const gfx = document.createElement('canvas'); gfx.width = LW; gfx.height = LH;
+const g = gfx.getContext('2d', { alpha: false }); g.imageSmoothingEnabled = false;
+const ctl = document.createElement('canvas'); ctl.width = LW; ctl.height = CH;
+const cg = ctl.getContext('2d', { alpha: false }); cg.imageSmoothingEnabled = false;
+const view = document.getElementById('view');
+const vctx = view.getContext('2d', { alpha: false });
+let sc = 4;
+
+const R_HEAP = 0, R_ROOT = 1, R_PARENT = 2, R_LEFT = 3, R_RIGHT = 4, R_LARGEST = 5, R_VIOL = 6, R_MAX = 7, R_SORTED = 8;
+const RB = [K.BLUE, K.ORANGE, K.YELLOW, K.CYAN, K.MAGENTA, K.GREEN, K.RED, K.ORANGE, K.GREEN];       // bright
+const RF = [K.DBLUE, K.BROWN, K.DYELLOW, K.DCYAN, K.PURPLE, K.DGREEN, K.DRED, K.DYELLOW, K.DGREEN];  // dark
+
+function roleOf(i) {
+  if (S.done || i >= S.sortedStart) return R_SORTED;
+  if (S.sifting) {
+    if (i === S.root) return S.violation ? R_VIOL : R_PARENT;
+    if (S.largest >= 0 && i === S.largest) return R_LARGEST;
+    if (i === S.left) return R_LEFT;
+    if (i === S.right) return R_RIGHT;
+  }
+  if ((S.evt === E.EXTRACT_MAX_START || S.evt === E.ROOT_END_SWAP) && (i === 0 || i === S.endIdx)) return R_MAX;
+  if (i === 0) return R_ROOT;
+  return R_HEAP;
+}
+
+const PH_BG = [K.DBLUE, K.DCYAN, K.DYELLOW, K.DGREEN];
+function drawTitle() {
+  rect(0, 0, LW, 7, PH_BG[S.phase]);
+  text('HEAP SORT', 2, 1, K.WHITE);
+  const x1 = 41, x2 = 82;
+  if (S.phase === 1) { rect(x1 - 2, 0, 35, 7, K.CYAN); text('MAX HEAP', x1, 1, K.VOID); } else text('MAX HEAP', x1, 1, K.TEXT);
+  text('@', x1 + 34, 1, K.WHITE);
+  if (S.phase === 2) { rect(x2 - 2, 0, 47, 7, K.ORANGE); text('EXTRACT MAX', x2, 1, K.VOID); } else text('EXTRACT MAX', x2, 1, K.TEXT);
+}
+
+function edge(p, c, color) {
+  const x0 = TX[p], x1 = TX[c], y = TY[p];
+  vl(x0, y + 7, y + 8, color); hl(x0, x1, y + 8, color); vl(x1, y + 8, y + 9, color);
+}
+
+function drawNode(i, cx, cy) {
+  const role = roleOf(i), sorted = role === R_SORTED;
+  let bd = RB[role];
+  const fl = RF[role];
+  if (A.restoreT > 0 && role <= R_ROOT && ((A.restoreT >> 2) & 1)) bd = K.GREEN;
+  const bx = cx - 4, by = cy, v = S.arr[i];
+  rect(bx, by, 9, 7, bd);
+  rect(bx + 1, by + 1, 7, 5, fl);
+  num(v, bx + 1 + ((7 - numW(v)) >> 1), by + 1, K.WHITE);
+  if (A.flash[i] > 0 && (((A.flash[i] >> 1) & 1) === 0)) box(bx - 1, by - 1, 11, 9, A.flashC[i]);
+  num(i, bx + 10, by + 1, role === R_HEAP ? K.GRAY : (sorted ? K.DGREEN : bd));
+  if (i === 0 && !sorted) text('ROOT', bx - 17, by + 1, K.ORANGE);
+}
+function drawGhost(i) {
+  const bx = TX[i] - 4, by = TY[i], v = S.arr[i];
+  px(bx, by, K.LINE); px(bx + 8, by, K.LINE); px(bx, by + 6, K.LINE); px(bx + 8, by + 6, K.LINE);
+  num(v, bx + 1 + ((7 - numW(v)) >> 1), by + 1, K.DGREEN);
+  num(i, bx + 10, by + 1, K.LINE);
+}
+
+function drawTree() {
+  const lim = S.done ? N : S.sortedStart;                     // tree = active heap only
+  const ec = S.done ? K.DGREEN : K.LINE;
+  for (let c = 1; c < N; c++) if (c < lim) edge((c - 1) >> 1, c, ec);
+  if (S.sifting && !S.done) {                                 // sift-down family highlighted on the tree
+    const r = S.root;
+    if (S.left >= 0) edge(r, S.left, (S.evt === E.COMPARE_PARENT_LEFT || S.cmpB === S.left) ? K.CYAN : K.DCYAN);
+    if (S.right >= 0) edge(r, S.right, (S.evt === E.COMPARE_PARENT_RIGHT || S.cmpB === S.right) ? K.MAGENTA : K.PURPLE);
+    if (S.largest >= 0 && S.largest !== r) edge(r, S.largest, S.evt === E.HEAP_VIOLATION ? K.RED : K.GREEN);
+  }
+  if ((S.evt === E.COMPARE_PARENT_LEFT || S.evt === E.COMPARE_PARENT_RIGHT) && S.cmpA >= 0 && S.cmpB >= 0) {
+    dotted(TX[S.cmpA], TY[S.cmpA] + 3, TX[S.cmpB], TY[S.cmpB] + 3, K.WHITE, A.pulse >> 2);
+  }
+  for (let i = 0; i < N; i++) {                               // resting nodes
+    if (i >= lim) { drawGhost(i); continue; }
+    if (tweenFrom(i) < 0) drawNode(i, TX[i], TY[i]);
+  }
+  if (A.swapActive) {                                         // travelling nodes on top, with trails
+    const f = ease(A.swapT / A.swapDur);
+    for (let m = 0; m < 2; m++) {
+      const i = m ? A.swapJ : A.swapI, from = m ? A.swapI : A.swapJ;
+      if (i >= lim || from >= lim) continue;
+      for (let k = 3; k >= 1; k--) {
+        const ff = ease(A.swapT / A.swapDur - k * 0.07);
+        if (ff > 0 && ff < f) px(Math.round(TX[from] + (TX[i] - TX[from]) * ff), Math.round(TY[from] + (TY[i] - TY[from]) * ff) + 3, k === 1 ? K.LIGHT : k === 2 ? K.DIM : K.LINE);
+      }
+      const hop = Math.round(Math.sin(Math.PI * f) * 3) * (i < from ? -1 : 1);
+      drawNode(i, Math.round(TX[from] + (TX[i] - TX[from]) * f), Math.round(TY[from] + (TY[i] - TY[from]) * f) + hop);
+    }
+  }
+}
+
+function drawBar(i, cx, hop) {
+  const role = roleOf(i), sorted = role === R_SORTED;
+  const v = S.arr[i], h = barH(v);
+  let bright = RB[role];
+  if (A.restoreT > 0 && role <= R_ROOT && ((A.restoreT >> 2) & 1)) bright = K.GREEN;
+  const top = BASE_Y - h + 1 - hop;
+  rect(cx - 4, top, 9, h, bright);
+  if (h >= 3) rect(cx + 4, top + 1, 1, h - 1, RF[role]);
+  if (sorted && h >= 2) rect(cx - 4, top, 8, 1, K.TEXT);
+  num(v, cx - (numW(v) >> 1) + (numW(v) === 3 ? 0 : 0), top - 6, sorted ? K.GREEN : role === R_HEAP ? K.TEXT : bright);
+  if (A.flash[i] > 0 && (((A.flash[i] >> 1) & 1) === 0)) box(cx - 5, top - 1, 11, h + 2, A.flashC[i]);
+}
+const HEAP_LABELS = [['ACTIVE HEAP', 'HEAP', 'H']];
+const SORT_LABELS = [];
+for (let k = 0; k <= N; k++) SORT_LABELS.push(['SORTED ' + k, 'SRT ' + k, 'S']);
+function bracket(x0, x1, c, labels) {
+  vl(x0, BRK_Y, BRK_Y + 4, c); vl(x1, BRK_Y, BRK_Y + 4, c);
+  let lab = null, lw = 0;
+  for (let i = 0; i < labels.length; i++) { const w = labels[i].length * 4 - 1; if (w + 6 <= x1 - x0 - 1) { lab = labels[i]; lw = w; break; } }
+  if (!lab) { hl(x0, x1, BRK_Y + 2, c); return; }
+  const lx = ((x0 + x1) >> 1) - (lw >> 1);
+  hl(x0, lx - 3, BRK_Y + 2, c); hl(lx + lw + 2, x1, BRK_Y + 2, c);
+  text(lab, lx, BRK_Y, c);
+}
+function drawArray() {
+  for (let i = 0; i < N; i++) {                               // slot indices stay put
+    const role = roleOf(i);
+    num(i, BXC[i] - 1, IDX_Y, role === R_HEAP || role === R_ROOT ? K.GRAY : role === R_SORTED ? K.DGREEN : RB[role]);
+  }
+  for (let i = 0; i < N; i++) if (tweenFrom(i) < 0) drawBar(i, BXC[i], 0);
+  if (A.swapActive) {
+    const f = ease(A.swapT / A.swapDur);
+    for (let m = 0; m < 2; m++) {
+      const i = m ? A.swapJ : A.swapI, from = m ? A.swapI : A.swapJ;
+      const hop = i > from ? Math.round(Math.sin(Math.PI * f) * 5) : 0;
+      const top = BASE_Y - barH(S.arr[i]) + 1 - hop;
+      for (let k = 3; k >= 1; k--) {
+        const ff = ease(A.swapT / A.swapDur - k * 0.07);
+        if (ff > 0 && ff < f) px(Math.round(BXC[from] + (BXC[i] - BXC[from]) * ff), top - 2, k === 1 ? K.LIGHT : k === 2 ? K.DIM : K.LINE);
+      }
+      drawBar(i, Math.round(BXC[from] + (BXC[i] - BXC[from]) * f), hop);
+    }
+  }
+  /* heap / sorted boundary */
+  const k = S.sortedStart, xb = 3 + 12 * k;
+  if (!S.done) {
+    const pc = (((A.pulse >> 3) & 1) || A.sizeFlash > 0) ? K.YELLOW : K.ORANGE;
+    vl(xb, 46, 66, pc);
+    if (((A.pulse >> 3) & 1) === 0) { px(xb - 1, 46, pc); px(xb + 1, 46, pc); }
+  }
+  if (k > 0) bracket(4, xb - 2, K.BLUE, HEAP_LABELS[0]);
+  if (k < N) bracket(xb + 2, 124, K.GREEN, SORT_LABELS[N - k]);
+}
+
+function drawParticles() {
+  for (let i = 0; i < PN; i++) {
+    if (PLf[i] > 0) {
+      const x = Math.round(PXa[i]), y = Math.round(PYa[i]);
+      if (x >= 0 && x < LW && y >= 0 && y < LH) px(x, y, PLf[i] < 5 ? K.DIM : PCo[i]);
+    }
+  }
+}
+
+function rlabel(l, v, y, cl, cv) {
+  const x = LW - (l.length * 4 + numW(v));
+  text(l, x, y, cl); num(v, x + l.length * 4, y, cv);
+}
+function drawCorners() {
+  const ph = S.phase;
+  if (ph === 0) text('READY', 0, 9, K.GRAY);
+  else if (ph === 1) text('BUILD', 0, 9, K.CYAN);
+  else if (ph === 2) text('EXTRACT', 0, 9, K.ORANGE);
+  else text('DONE', 0, 9, K.GREEN);
+  let x = text('SIZE ', 0, 15, K.GRAY);
+  num(S.heapSize, x, 15, (A.sizeFlash > 0 && ((A.sizeFlash >> 2) & 1)) ? K.YELLOW : K.TEXT);
+  if (ph === 2) { x = text('MAX ', 0, 21, K.GRAY); num(S.curMax, x, 21, K.ORANGE); }
+  else if (ph === 3) { x = text('MAX ', 0, 21, K.GRAY); num(S.arr[N - 1], x, 21, K.ORANGE); }
+  else { x = text('ROOT ', 0, 21, K.GRAY); num(S.arr[0], x, 21, K.ORANGE); }
+  rlabel('CMP ', S.comparisons, 9, K.GRAY, K.TEXT);
+  rlabel('SWP ', S.swaps, 15, K.GRAY, K.TEXT);
+  rlabel('SRT ', N - S.sortedStart, 21, K.GRAY, K.GREEN);
+}
+
+function putIdx(v, x, y, c) { return v >= 0 ? num(v, x, y, c) : text('-', x, y, K.DIM); }
+function drawComplexity() {
+  const page = (pageBase + ((pageT / 300) | 0)) & 1;
+  if (page === 0) {
+    text('TIME', 1, 73, K.CYAN);
+    text('BEST O(N LOG N)', 1, 79, K.TEXT); text('AVG  O(N LOG N)', 1, 85, K.TEXT); text('WRST O(N LOG N)', 1, 91, K.TEXT);
+    vl(63, 73, 94, K.LINE);
+    text('SPACE', 66, 73, K.CYAN);
+    text('AUX O(1)', 66, 79, K.TEXT); text('IN-PLACE: YES', 66, 85, K.GREEN); text('STABLE: NO', 66, 91, K.RED);
+  } else {
+    text('HEAP SORT WORST: O(N LOG N)', 1, 73, K.GREEN);
+    text('QUICK SORT WORST: O(N^2)', 1, 79, K.ORANGE);
+    text('HEAP SORT USES O(1) EXTRA', 1, 85, K.TEXT);
+    text('BUT IT IS NOT STABLE.', 1, 91, K.RED);
+  }
+  rect(121, 94, 2, 1, page === 0 ? K.WHITE : K.LINE); rect(125, 94, 2, 1, page === 1 ? K.WHITE : K.LINE);
+}
+function drawBand() {
+  rect(0, 72, LW, 24, K.PANEL); hl(0, LW - 1, 72, K.LINE);
+  if (mode === M_DONE) { drawComplexity(); return; }
+  let x = 1;
+  x = text('NODE ', x, 73, K.GRAY); x = putIdx(S.root, x, 73, K.YELLOW) + 4;
+  x = text('LEFT ', x, 73, K.GRAY); x = putIdx(S.left, x, 73, K.CYAN) + 4;
+  x = text('RIGHT ', x, 73, K.GRAY);
+  if (S.right >= 0) x = num(S.right, x, 73, K.MAGENTA) + 4;
+  else if (S.sifting && S.root >= 0) x = text('NONE', x, 73, K.DIM) + 4;
+  else x = text('-', x, 73, K.DIM) + 4;
+  x = text('BIG ', x, 73, K.GRAY); putIdx(S.largest, x, 73, K.GREEN);
+  x = text('I:', 1, 79, K.GRAY);
+  text('L=2I+1', 13, 79, K.CYAN); text('R=2I+2', 41, 79, K.MAGENTA); text('P=(I-1)/2', 69, 79, K.YELLOW);
+  text(U.m1, 1, 85, U.c1);
+  text(U.m2, 1, 91, U.c2);
+}
+
+function drawScene() {
+  use(g);
+  rect(0, 0, LW, LH, K.VOID);
+  drawTitle();
+  drawTree();
+  drawArray();
+  drawCorners();
+  drawBand();
+  drawParticles();
+}
+
+/* ------------------------------------------------ PIXEL-ART CONTROLS */
+const BTNS = [
+  { id: 'start', x: 2, y: 2 }, { id: 'pause', x: 34, y: 2 }, { id: 'step', x: 66, y: 2 }, { id: 'reset', x: 98, y: 2 },
+  { id: 'shuffle', x: 2, y: 13 }, { id: 'sound', x: 34, y: 13 }, { id: 'speed', x: 66, y: 13 }
+];
+const BW = 30, BH = 9;
+let hoverId = '', pressId = '', pressT = 0;
+function btnLabel(id) {
+  switch (id) {
+    case 'start': return 'START'; case 'pause': return 'PAUSE'; case 'step': return 'STEP';
+    case 'reset': return 'RESET'; case 'shuffle': return 'SHUFFLE'; case 'sound': return 'SOUND';
+    default: return 'SPD ' + SPEED_LBL[speedIdx];
+  }
+}
+function btnEnabled(id) {
+  if (id === 'start') return mode === M_IDLE || mode === M_PAUSE;
+  if (id === 'pause') return mode === M_RUN;
+  return true;
+}
+function drawControls() {
+  use(cg);
+  rect(0, 0, LW, CH, K.PANEL);
+  hl(0, LW - 1, 0, K.LINE);
+  for (let i = 0; i < BTNS.length; i++) {
+    const b = BTNS[i], en = btnEnabled(b.id);
+    const pressed = pressT > 0 && pressId === b.id, hover = hoverId === b.id && en;
+    rect(b.x, b.y, BW, BH, en ? K.DIM : K.LINE);
+    rect(b.x + 1, b.y + 1, BW - 2, BH - 2, pressed ? K.DBLUE : hover ? K.LINE : K.PANEL2);
+    let tc = en ? K.TEXT : K.LINE;
+    if (en && b.id === 'start') tc = K.GREEN;
+    if (en && b.id === 'pause') tc = K.YELLOW;
+    if (b.id === 'pause' && mode === M_PAUSE) tc = K.YELLOW;
+    const lab = btnLabel(b.id), lw = lab.length * 4 - 1;
+    let lx = b.x + ((BW - lw) >> 1) + (b.id === 'sound' ? 2 : 0);
+    const ly = b.y + 2 + (pressed ? 1 : 0);
+    if (b.id === 'sound') {
+      tc = soundOn ? K.GREEN : K.RED;
+      rect(b.x + 3, b.y + 3, 2, 3, soundOn ? K.GREEN : K.DRED);
+      lx = b.x + 8;
+    }
+    text(lab, lx, ly, tc);
+  }
+  const st = mode === M_IDLE ? 'READY' : mode === M_RUN ? 'RUNNING' : mode === M_PAUSE ? 'PAUSED' : 'DONE';
+  const sc2 = mode === M_RUN ? K.CYAN : mode === M_PAUSE ? K.YELLOW : mode === M_DONE ? K.GREEN : K.GRAY;
+  text(st, 98 + ((BW - (st.length * 4 - 1)) >> 1), 15, sc2);
+}
+
+function render() {
+  drawScene();
+  drawControls();
+  vctx.imageSmoothingEnabled = false;
+  vctx.drawImage(gfx, 0, 0, LW * sc, LH * sc);
+  vctx.drawImage(ctl, 0, LH * sc, LW * sc, CH * sc);
+}
+
+/* ------------------------------------------------ LAYOUT + INPUT */
+function layout() {
+  const de = document.documentElement, dpr = window.devicePixelRatio || 1;
+  sc = Math.max(1, Math.floor(Math.min(de.clientWidth * dpr / LW, de.clientHeight * dpr / (LH + CH))));
+  view.width = LW * sc; view.height = (LH + CH) * sc;
+  view.style.width = (view.width / dpr) + 'px'; view.style.height = (view.height / dpr) + 'px';
+  vctx.imageSmoothingEnabled = false;
+}
+function hitTest(e) {
+  const r = view.getBoundingClientRect();
+  const lx = (e.clientX - r.left) * (LW / r.width), ly = (e.clientY - r.top) * ((LH + CH) / r.height) - LH;
+  for (let i = 0; i < BTNS.length; i++) {
+    const b = BTNS[i];
+    if (lx >= b.x && lx < b.x + BW && ly >= b.y && ly < b.y + BH) return b.id;
+  }
+  return '';
+}
+view.addEventListener('pointerdown', function (e) {
+  const id = hitTest(e);
+  if (id && btnEnabled(id)) { pressId = id; pressT = 8; act(id); }
+  else ensureAudio();
+});
+view.addEventListener('pointermove', function (e) {
+  hoverId = hitTest(e);
+  view.style.cursor = hoverId ? 'pointer' : 'default';
+});
+view.addEventListener('pointerleave', function () { hoverId = ''; });
+window.addEventListener('resize', layout);
+window.addEventListener('keydown', function (e) {
+  if (e.target && e.target.tagName === 'BUTTON') return;
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const k = e.key;
+  if (k === ' ' || k === 'Enter') { e.preventDefault(); ensureAudio(); if (mode === M_RUN) doPause(); else doStart(); }
+  else if (k === 'n' || k === 'N' || k === 'ArrowRight') { e.preventDefault(); act('step'); }
+  else if (k === 'r' || k === 'R') act('reset');
+  else if (k === 's' || k === 'S') act('shuffle');
+  else if (k === 'm' || k === 'M') act('sound');
+  else if (k === '+' || k === '=') { if (speedIdx < SPEEDS.length - 1) speedIdx++; }
+  else if (k === '-' || k === '_') { if (speedIdx > 0) speedIdx--; }
+});
+(function bindHiddenButtons() {
+  const list = document.querySelectorAll('[data-act]');
+  for (let i = 0; i < list.length; i++) {
+    (function (el) { el.addEventListener('click', function () { act(el.getAttribute('data-act')); }); })(list[i]);
+  }
+})();
+
+/* ------------------------------------------------ MAIN LOOP (60 Hz fixed step) */
+let lastT = 0, acc = 0;
+function frame(t) {
+  if (!lastT) lastT = t;
+  let dt = t - lastT; lastT = t;
+  if (dt > 200) dt = 200;
+  acc += dt;
+  const stepMs = 1000 / 60 / SPEEDS[speedIdx];
+  let guard = 0;
+  while (acc >= stepMs && guard < 24) { tick(); acc -= stepMs; guard++; }
+  if (guard >= 24) acc = 0;
+  if (pressT > 0) pressT--;
+  render();
+  requestAnimationFrame(frame);
+}
+
+resetAll(INITIAL);
+layout();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
