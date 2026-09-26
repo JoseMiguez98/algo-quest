@@ -28,6 +28,27 @@ Para publicar en una subcarpeta (por ejemplo GitHub Pages en `/algo-quest/`): `B
 El deploy lo hace `.github/workflows/deploy.yml` en cada push a `main` o a `dev`.
 El resultado en `dist/` es 100 % estático: una página por algoritmo (`/sorting/quick-sort/`), la portada y `/compare/`.
 
+## Hecho 100 % con código
+
+**No hay librerías en runtime.** `package.json` no tiene `dependencies`: el sitio es TypeScript vanilla. Vite,
+Vitest, Playwright y compañía son herramientas de build y de test, y no llegan al navegador.
+
+**No hay ni un archivo de imagen ni de audio.** Todo lo que ves y escuchás se genera en el momento:
+
+| Qué | Cómo se hace |
+|---|---|
+| Barras, nodos, grillas y animaciones | Canvas dibujado por el renderer de cada theme |
+| Marcos de ventana, botones e íconos | SVG armado en código, pixel por pixel |
+| Fondos, estrellas y montañas | SVG pixel art generado con una semilla (`src/themes/megadrive/decor.ts`) y CSS |
+| Texto dentro del canvas | Una fuente bitmap de 5×7 definida en `src/themes/pixel/bitmap-font.ts` |
+| Efectos y música | Web Audio: ondas de pulso, triángulo, ruido LFSR y síntesis FM de 2 operadores, con música procedural |
+
+**Recursos externos**, a la vista:
+- Las tipografías de la interfaz (Press Start 2P, Pixelify Sans e Inter, todas con licencia OFL) se cargan desde Google Fonts.
+- En producción se carga el contador de [GoatCounter](#métricas).
+
+Esa regla vale también para los aportes: nada de dependencias en runtime ni de archivos de assets.
+
 ## Cómo está organizado
 
 | Carpeta | Qué hay |
@@ -45,16 +66,29 @@ La regla central: **los algoritmos solo emiten eventos semánticos** (`compare`,
 snapshot inmutable del estado. Nunca conocen colores, sonidos ni el DOM. Las escenas traducen el estado a primitivas
 (`bar`, `node`, `edge`…), y el theme decide cómo se ve y suena cada una.
 
-## Contribuir
+## Contribuir con AI agents
 
-Los aportes son bienvenidos: algoritmos, themes, traducciones, fixes y mejores explicaciones. Empezá por
-[CONTRIBUTING.md](CONTRIBUTING.md).
+Algo Quest está pensado para contribuir **trabajando junto a un AI agent**. El repo trae las instrucciones que el
+agente necesita, así que cualquiera que colabore sigue los mismos pasos, las mismas reglas y la misma vara de calidad:
 
-- **Agregar un algoritmo:** una carpeta en `src/algorithms/<categoría>/<id>/` más una línea en `src/algorithms/registry.ts`. El checklist está en [`.claude/skills/add-algorithm`](.claude/skills/add-algorithm/SKILL.md).
-- **Agregar un theme:** tokens, CSS, renderer y sound pack en `src/themes/<id>/`. Ver [`.claude/skills/add-theme`](.claude/skills/add-theme/SKILL.md).
-- **Ramas y PRs:** las ramas salen de `dev` y los PRs van hacia `dev`. `main` es producción. Ver [`.claude/skills/contribute`](.claude/skills/contribute/SKILL.md).
+| Archivo | Para qué |
+|---|---|
+| [`AGENTS.md`](AGENTS.md) | Reglas del proyecto para cualquier agente (Claude Code, Cursor, Codex, Copilot…) |
+| [`.claude/skills/add-algorithm`](.claude/skills/add-algorithm/SKILL.md) | Agregar un algoritmo o una categoría: núcleo, tests contra referencia, contenido ES/EN y registro |
+| [`.claude/skills/add-theme`](.claude/skills/add-theme/SKILL.md) | Crear un theme: tokens, CSS, renderer, sonidos y auditoría de accesibilidad |
+| [`.claude/skills/contribute`](.claude/skills/contribute/SKILL.md) | Ramas, commits, PRs, releases y hotfixes |
 
-Con [Claude Code](https://claude.com/claude-code), esas tres skills se cargan solas cuando pedís, por ejemplo, "agregá comb sort".
+Con [Claude Code](https://claude.com/claude-code) las skills se activan solas: pedile "agregá comb sort" o "haceme
+un theme de Game Boy" y sigue el checklist completo. Con otro agente, apuntalo a `AGENTS.md`. Si preferís trabajar
+sin agente, las skills se leen como checklists comunes.
+
+Cómo empezar:
+1. Leé [CONTRIBUTING.md](CONTRIBUTING.md).
+2. Creá tu rama desde `dev`.
+3. Abrí el PR hacia `dev`. `main` es producción.
+
+Si encontrás un paso que el agente no supo resolver, **mejorar la skill también es un aporte**: así el próximo
+colaborador no se choca con lo mismo.
 
 ## Métricas
 

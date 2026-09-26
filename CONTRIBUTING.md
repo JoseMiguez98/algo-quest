@@ -1,12 +1,42 @@
 # Cómo contribuir a Algo Quest
 
-> **English summary.** Algo Quest is an educational site, so accuracy comes first. Every algorithm core is property-tested against an independent reference, and every piece of content cites sources that were actually checked.
+> **English summary.** Algo Quest is a visualizer and playground for computer science algorithms, and **it is built to be extended with AI agents**.
 >
-> Branch off `dev`, open your PR into `dev`, and keep `npm run typecheck && npm test && npm run e2e && npm run build` green. Content ships in both Spanish and English.
+> [`AGENTS.md`](AGENTS.md) and the shared skills in [`.claude/skills/`](.claude/skills/) give every contributor's agent the same workflow and quality bar.
 >
-> Checklists: [adding an algorithm](.claude/skills/add-algorithm/SKILL.md), [adding a theme](.claude/skills/add-theme/SKILL.md) and [git workflow](.claude/skills/contribute/SKILL.md). Issues and PRs in English are welcome.
+> The ground rules:
+> - Accuracy first: every algorithm core is property-tested against an independent reference.
+> - Zero runtime dependencies.
+> - No image or audio files: everything is drawn and synthesized in code.
+> - Content ships in both Spanish and English.
+>
+> Branch off `dev`, open your PR into `dev`, and keep `npm run typecheck && npm test && npm run e2e && npm run build` green. Issues and PRs in English are welcome.
 
 ¡Gracias por sumarte! Podés aportar de muchas formas: un algoritmo nuevo, un theme, una traducción, un bug, una referencia mejor o una explicación más clara.
+
+## Contribuir con un AI agent
+
+Este repo está pensado para que contribuyas **trabajando junto a un AI agent**. El objetivo es que todos sigamos los mismos pasos y la misma vara de calidad, sin importar quién escriba el código.
+
+| Archivo | Qué le da al agente |
+|---|---|
+| [`AGENTS.md`](AGENTS.md) | Las reglas del proyecto. Lo leen Claude Code (vía `CLAUDE.md`), Cursor, Codex, Copilot y otros |
+| [`.claude/skills/add-algorithm`](.claude/skills/add-algorithm/SKILL.md) | El paso a paso para agregar un algoritmo o una categoría |
+| [`.claude/skills/add-theme`](.claude/skills/add-theme/SKILL.md) | El paso a paso para crear un theme |
+| [`.claude/skills/contribute`](.claude/skills/contribute/SKILL.md) | Ramas, commits, PRs, releases y hotfixes |
+
+**Cómo trabajar:**
+
+1. Con [Claude Code](https://claude.com/claude-code), las skills se activan solas. Pedí "agregá comb sort" o "haceme un theme de Game Boy" y el agente sigue el checklist completo.
+2. Con otro agente, indicale que lea `AGENTS.md` y la skill que corresponda antes de empezar.
+3. **Vos seguís siendo responsable del PR.**
+   - Revisá lo que generó el agente.
+   - Abrí el visualizer y miralo paso a paso.
+   - Verificá las referencias.
+   - El agente nunca debería hacer push ni abrir PRs sin tu OK.
+4. Si el agente se trabó en algo que la skill no explicaba, **mejorar la skill en el mismo PR (o en otro) también es un aporte**. Las skills son documentación viva.
+
+Sin agente también podés contribuir: las skills se leen como checklists comunes.
 
 ## Antes de empezar
 
@@ -43,6 +73,22 @@ A partir de esos eventos:
 - el theme (`src/themes/`) decide cómo se ve y cómo suena cada una.
 
 El mapa completo de carpetas está en el [README](README.md#cómo-está-organizado).
+
+## Todo se hace con código
+
+Algo Quest no tiene librerías en runtime ni archivos de assets. Los aportes tienen que respetar lo mismo:
+
+- **Sin dependencias en runtime.** `package.json` no tiene `dependencies` y así se queda. Si una herramienta de desarrollo nueva hace falta, se discute antes en un issue.
+- **Sin imágenes, audio ni fuentes de íconos.** Las alternativas son estas:
+
+| En lugar de | Usá |
+|---|---|
+| PNG, JPG o GIF, sprites | Primitivas del renderer del theme (canvas), o SVG armado en código con `src/themes/pixel/svg.ts` |
+| Íconos | `src/ui/icons.ts`: íconos 8×8 definidos pixel por pixel |
+| MP3 o WAV | Cues del `SoundPack` sintetizados con Web Audio |
+| Música grabada | Un `MusicTrack` procedural |
+
+Las únicas excepciones son las tipografías de la interfaz desde Google Fonts (con licencia OFL) y el contador de GoatCounter en producción.
 
 ## La vara de exactitud
 
@@ -121,6 +167,8 @@ El detalle está en [`.claude/skills/contribute/SKILL.md`](.claude/skills/contri
 ### Checklist del PR
 
 - [ ] `npm run typecheck && npm test && npm run e2e && npm run build` pasan.
+- [ ] Sin dependencias en runtime nuevas y sin archivos de imagen o audio.
+- [ ] Si trabajaste con un agente: revisaste el resultado a mano y la skill quedó al día si hizo falta.
 - [ ] Si es un algoritmo: tests contra una referencia independiente, fila en `docs/fidelity.md`, contenido ES/EN y referencias verificadas.
 - [ ] Si es un theme: todos los `RequiredColor`, la CSS cubre todas las clases y la auditoría a11y pasa.
 - [ ] Captura o GIF si cambia algo visual.
