@@ -43,6 +43,7 @@ You can contribute without an agent as well: the skills read as plain checklists
 - For big changes (a new category, a theme, architecture changes), open an issue first using the matching template. That way we agree on the approach before you invest time.
 - For something small (a typo, an obvious bug), send the PR directly.
 - By participating you agree to the [Code of Conduct](CODE_OF_CONDUCT.md).
+- Found a security problem? Report it privately as described in [SECURITY.md](.github/SECURITY.md), not in a public issue.
 
 ## 🛠️ Set up your environment
 

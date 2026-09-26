@@ -61,15 +61,17 @@ export function algorithmPages(): Plugin {
       const template = join(outDir, 'visualizer.html');
       if (!existsSync(template)) return;
       const html = readFileSync(template, 'utf8');
+      const setMeta = (doc: string, attr: string, value: string) =>
+        doc.replace(new RegExp(`(<meta ${attr} content=")[^"]*(")`), `$1${escape(value)}$2`);
       for (const p of pages) {
         const dir = join(outDir, p.category, p.id);
+        const title = `${p.title} · Algo Quest`;
         mkdirSync(dir, { recursive: true });
-        writeFileSync(
-          join(dir, 'index.html'),
-          html
-            .replace(/<title>.*?<\/title>/, `<title>${escape(p.title)} · Algo Quest</title>`)
-            .replace('</head>', `  <meta name="description" content="${escape(p.description)}" />\n  </head>`),
-        );
+        let page = html.replace(/<title>.*?<\/title>/, `<title>${escape(title)}</title>`);
+        page = setMeta(page, 'name="description"', p.description);
+        page = setMeta(page, 'property="og:title"', title);
+        page = setMeta(page, 'property="og:description"', p.description);
+        writeFileSync(join(dir, 'index.html'), page);
       }
     },
   };

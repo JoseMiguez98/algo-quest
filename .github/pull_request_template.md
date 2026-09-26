@@ -1,37 +1,37 @@
-## Qué cambia
+## What changes
 
-<!-- Una o dos frases: qué y por qué. Enlazá el issue si existe (Closes #123). -->
+<!-- One or two sentences: what and why. Link the issue if there is one (Closes #123). Spanish is fine too. -->
 
-## Tipo
+## Type
 
-- [ ] Algoritmo nuevo
-- [ ] Theme nuevo
+- [ ] New algorithm
+- [ ] New theme
 - [ ] Feature
 - [ ] Fix
-- [ ] Docs / contenido
+- [ ] Docs / content
 - [ ] Chore / CI
 
 ## Checklist
 
-- [ ] El PR apunta a `dev` (o a `main` solo si es un hotfix)
-- [ ] `npm run typecheck && npm test && npm run e2e && npm run build` pasan
-- [ ] Probado a mano en escritorio y mobile (~390 px)
-- [ ] Captura o GIF si cambia algo visual
-- [ ] Sin dependencias en runtime nuevas ni archivos de imagen o audio: todo se genera con código
-- [ ] Si trabajé con un AI agent: revisé el resultado a mano y actualicé la skill si le faltaba algo
+- [ ] The PR targets `dev` (or `main` only for a hotfix)
+- [ ] `npm run typecheck && npm test && npm run e2e && npm run build` pass
+- [ ] Tested by hand on desktop and mobile (~390 px)
+- [ ] Screenshot or GIF if something visual changes
+- [ ] No new runtime dependencies and no image or audio files: everything is generated in code
+- [ ] If I worked with an AI agent: I reviewed the result by hand and updated the skill if it was missing something
 
-### Si es un algoritmo
+### For an algorithm
 
-- [ ] Tests de propiedades contra una referencia independiente
-- [ ] Rasgos demostrados (estable / no estable / óptimo)
-- [ ] Fila en `docs/fidelity.md`
-- [ ] Contenido ES + EN con 2–3 referencias verificadas
+- [ ] Property tests against an independent reference
+- [ ] Proven traits (stable / not stable / optimal)
+- [ ] A row in `docs/fidelity.md`
+- [ ] ES + EN content with 2–3 verified references
 
-**Variante implementada y referencias:**
+**Implemented variant and references:**
 
-### Si es un theme
+### For a theme
 
-- [ ] Define todos los `RequiredColor` y los estados visuales
-- [ ] La CSS cubre todas las clases (ver la skill `add-theme`)
-- [ ] Sound pack con todos los cues
-- [ ] Agregado a `tests/e2e/a11y.spec.ts` con 0 violaciones
+- [ ] Defines every `RequiredColor` and the visual states
+- [ ] The CSS covers every class (see the `add-theme` skill)
+- [ ] Sound pack with every cue
+- [ ] Added to `tests/e2e/a11y.spec.ts` with 0 violations
