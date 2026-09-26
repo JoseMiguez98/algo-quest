@@ -122,7 +122,9 @@ async function mount(root: HTMLElement): Promise<void> {
       h('div', { class: 'narration' }, narration),
     );
     el.classList.add('fighter');
-    return { def, content: contents.get(def.id)!, steps: [], stage: new Stage(host, stageRenderer(), sceneFor(def, [])), narration, counters, badge, el, last: -1 };
+    const stage = new Stage(host, stageRenderer(), sceneFor(def, []));
+    stage.setLabel(`${slot}: ${name(def)}`);
+    return { def, content: contents.get(def.id)!, steps: [], stage, narration, counters, badge, el, last: -1 };
   }
 
   function rebuild(): void {

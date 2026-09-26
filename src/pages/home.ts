@@ -178,6 +178,7 @@ function createCartridge(entry: Entry): HTMLAnchorElement {
   const still = steps[Math.floor(steps.length * 0.45)] ?? steps[0]!;
   requestAnimationFrame(() => {
     stage = new Stage(screen, stageRenderer(), sceneFor(def, input));
+    stage.setLabel(content.name);
     stage.render(still, undefined, 1);
   });
   const play = () => {
@@ -220,6 +221,7 @@ function createDemo(entries: Entry[]) {
     const input = initialInput(e.def, null);
     if (!stage) stage = new Stage(screen, stageRenderer(), sceneFor(e.def, input));
     else stage.setScene(sceneFor(e.def, input));
+    stage.setLabel(`${t('home.demo')}: ${e.content.name}`);
     caption.textContent = `${e.level} · ${e.content.name}`;
     player.load(e.steps);
     if (reduced) {
