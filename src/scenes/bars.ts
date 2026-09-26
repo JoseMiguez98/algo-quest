@@ -14,9 +14,15 @@ export interface BarsLayout {
 
 /** Extra drawing hooks used by algorithm-specific layers (aux rows, trees, buckets). */
 export interface BarsLayer {
-  /** Logical pixels this layer needs below the main bars. */
+  /** Logical pixels this layer needs below the main bars; 0 draws over the main area. */
   height: number;
   draw(r: StageRenderer, f: SceneFrame<S>, layout: BarsLayout, top: number): void;
+}
+
+export interface BarsOptions {
+  maxValue?: number;
+  /** Custom value label, optionally highlighting one character (e.g. the current radix digit). */
+  label?: (value: number, f: SceneFrame<S>) => { text: string; highlight?: number };
 }
 
 
@@ -25,11 +31,14 @@ export class BarsScene implements Scene<S> {
   readonly minWidth = 180;
   readonly maxWidth = 720;
 
+  private readonly maxValue?: number;
+
   constructor(
     private readonly layers: BarsLayer[] = [],
-    private readonly maxValue?: number,
+    private readonly options: BarsOptions = {},
   ) {
-    this.logicalHeight = 160 + layers.reduce((h, l) => h + l.height, 0);
+    this.maxValue = options.maxValue;
+    this.logicalHeight = 160 + layers.reduce((h, l) => h + l.height, 0) + (layers.some((l) => l.height) ? 4 : 0);
   }
 
   draw(r: StageRenderer, f: SceneFrame<S>): void {
@@ -38,6 +47,7 @@ export class BarsScene implements Scene<S> {
     const n = s.items.length;
     const all = s.items.filter((x): x is SortItem => !!x);
     const maxValue = this.maxValue ?? Math.max(1, ...all.map((x) => x.value), ...collectExtraValues(s));
+    if (maxValue <= 0) return;
     const pad = 10;
     const gap = n > 18 ? 1 : 2;
     const barW = Math.max(2, Math.floor((width - pad * 2 - gap * (n - 1)) / Math.max(1, n)));
@@ -76,17 +86,34 @@ export class BarsScene implements Scene<S> {
       const state: VisualState = s.marks[i] ?? 'default';
       const lift = state === 'swap' && from !== undefined && from !== i ? Math.round(Math.sin(t * Math.PI) * 6) : 0;
       r.bar(px, baseY - h - lift, barW, h, state);
-      if (barW >= 11) r.text(String(it.value), px + barW / 2 + 1, labelY, { align: 'center', tone: state === 'default' ? 'muted' : 'normal', color: state === 'default' ? undefined : r.color(state) });
+      if (barW >= 11) this.drawLabel(r, f, it.value, px + barW / 2 + 1, labelY, state);
       if (duplicates.has(it.id) && barW >= 7) r.text(String(duplicates.get(it.id)! + 1), px + barW / 2 + 1, baseY - h - lift - 9, { align: 'center', tone: 'muted' });
     });
 
     for (const p of s.pointers) r.pointer(layout.x(p.index) + barW / 2, labelY + 10, p.label, { up: true, state: 'active' });
 
-    let y = this.logicalHeight - this.layers.reduce((h, l) => h + l.height, 0);
+    const below = this.layers.reduce((h, l) => h + l.height, 0);
+    if (below) r.panel(2, 158, width - 4, below);
+    let y = 160;
     for (const layer of this.layers) {
-      layer.draw(r, f, layout, y);
+      layer.draw(r, f, layout, layer.height ? y : 0);
       y += layer.height;
     }
+  }
+
+  private drawLabel(r: StageRenderer, f: SceneFrame<S>, value: number, cx: number, y: number, state: VisualState): void {
+    const color = state === 'default' ? r.color('inactive') : r.color(state);
+    const custom = this.options.label?.(value, f);
+    if (!custom) {
+      r.text(String(value), cx, y, { align: 'center', tone: state === 'default' ? 'muted' : 'normal', color: state === 'default' ? undefined : color });
+      return;
+    }
+    const w = r.measure(custom.text);
+    let x = Math.round(cx - w / 2);
+    [...custom.text].forEach((ch, i) => {
+      r.text(ch, x, y, { color: i === custom.highlight ? r.color('compare') : state === 'default' ? undefined : color, tone: 'muted' });
+      x += r.measure(ch) + 1;
+    });
   }
 }
 

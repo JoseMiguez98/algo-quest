@@ -13,6 +13,10 @@ export function structureViews(layers: readonly string[], input: unknown): Struc
   const views: Record<string, StructureView> = {
     queue: { title: t('structure.queue'), kind: 'queue', items: (s) => ((extra(s).queue as number[]) ?? []).map(label) },
     stack: { title: t('structure.stack'), kind: 'stack', items: (s) => ((extra(s).stack as number[]) ?? []).map(label) },
+    'queue-f': { title: t('structure.queueForward'), kind: 'queue', items: (s) => ((extra(s).forward as { queue: number[] })?.queue ?? []).map(label) },
+    'queue-b': { title: t('structure.queueBackward'), kind: 'queue', items: (s) => ((extra(s).backward as { queue: number[] })?.queue ?? []).map(label) },
+    ranges: { title: t('structure.recursion'), kind: 'stack', items: (s) => ((extra(s).stack as { lo: number; hi: number }[]) ?? []).map((f) => `[${f.lo}..${f.hi}]`) },
+    path: { title: t('structure.stack'), kind: 'queue', items: (s) => ((extra(s).path as number[]) ?? []).map(label) },
     pq: {
       title: t('structure.pq'),
       kind: 'queue',

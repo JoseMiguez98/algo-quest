@@ -69,9 +69,11 @@ export class PixelRenderer implements StageRenderer {
   present(target: HTMLCanvasElement): void {
     const t = target.getContext('2d')!;
     t.imageSmoothingEnabled = false;
-    const scale = Math.max(1, Math.floor(Math.min(target.width / this.w, target.height / this.h)));
-    const dw = this.w * scale;
-    const dh = this.h * scale;
+    const fit = Math.min(target.width / this.w, target.height / this.h);
+    // Integer scaling keeps pixels even; at ≥3× device pixels half-steps are imperceptible and avoid big letterboxes.
+    const scale = fit >= 3 ? Math.floor(fit * 2) / 2 : Math.max(1, Math.floor(fit));
+    const dw = Math.round(this.w * scale);
+    const dh = Math.round(this.h * scale);
     t.fillStyle = this.c('stage');
     t.fillRect(0, 0, target.width, target.height);
     t.drawImage(this.off, Math.floor((target.width - dw) / 2), Math.floor((target.height - dh) / 2), dw, dh);
@@ -255,7 +257,7 @@ export class PixelRenderer implements StageRenderer {
 
   panel(x: number, y: number, w: number, h: number, title?: string): void {
     [x, y, w, h] = [Math.round(x), Math.round(y), Math.round(w), Math.round(h)];
-    this.rect(x + 1, y + 1, w - 2, h - 2, this.c('window'));
+    this.rect(x + 1, y + 1, w - 2, h - 2, this.c('cell'));
     const b = this.c('border');
     this.rect(x + 2, y, w - 4, 1, b);
     this.rect(x + 2, y + h - 1, w - 4, 1, b);
@@ -267,7 +269,7 @@ export class PixelRenderer implements StageRenderer {
     this.rect(x + w - 2, y + h - 2, 1, 1, b);
     if (title) {
       const tw = textWidth(title) + 4;
-      this.rect(x + 5, y - 3, tw, 7, this.c('window'));
+      this.rect(x + 5, y - 3, tw, 7, this.c('cell'));
       this.text(title, x + 7, y - 3, { tone: 'muted' });
     }
   }

@@ -18,6 +18,8 @@ export interface GraphInputSpec {
   kind: 'graph';
   /** Default dataset id from src/data. */
   fixture: string;
+  /** Alternative datasets offered in the dataset picker. */
+  alternatives?: string[];
   needsTarget: boolean;
   weighted: boolean;
   directed?: boolean;
