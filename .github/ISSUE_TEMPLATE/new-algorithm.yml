@@ -1,39 +1,39 @@
-name: Algoritmo nuevo
-description: Proponé un algoritmo (o una categoría) para visualizar.
+name: New algorithm
+description: Propose an algorithm (or a category) to visualize.
 labels: [algorithm]
 body:
   - type: input
     id: name
     attributes:
-      label: Algoritmo
+      label: Algorithm
       placeholder: Comb sort
     validations:
       required: true
   - type: dropdown
     id: category
     attributes:
-      label: Categoría
+      label: Category
       options:
-        - Ordenamiento
-        - Grafos / recorridos
-        - Categoría nueva (explicá abajo)
+        - Sorting
+        - Graphs / traversals
+        - New category (explain below)
     validations:
       required: true
   - type: textarea
     id: variant
     attributes:
-      label: Variante y referencias
-      description: Qué variante exacta (pivote, secuencia de saltos, desempates…) y 2–3 fuentes que la describan.
+      label: Variant and references
+      description: The exact variant (pivot, gap sequence, tie-breaking…) and 2–3 sources that describe it.
     validations:
       required: true
   - type: textarea
     id: why
     attributes:
-      label: Qué enseña
-      description: Qué idea nueva aporta frente a los algoritmos que ya están.
+      label: What it teaches
+      description: What new idea it brings compared to the algorithms already on the site.
   - type: checkboxes
     id: doing
     attributes:
-      label: ¿Lo implementás vos?
+      label: Will you implement it?
       options:
-        - label: Quiero implementarlo siguiendo CONTRIBUTING.md
+        - label: I want to implement it following CONTRIBUTING.md
