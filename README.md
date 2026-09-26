@@ -4,8 +4,15 @@
 [![Deploy](https://github.com/JoseMiguez98/algo-quest/actions/workflows/deploy.yml/badge.svg)](https://github.com/JoseMiguez98/algo-quest/actions/workflows/deploy.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Visualizaciones educativas de algoritmos de ordenamiento y de grafos, con estética de consola de 16 bits,
-sonido sintetizado por código, pseudocódigo en vivo, modo playground y comparador.
+Un visualizer y playground de algoritmos de computer science. Mirá paso a paso cómo ordenan los sorts y cómo
+recorren los algoritmos de grafos. Podés adelantar, retroceder y seguir el pseudocódigo línea por línea.
+
+Después meté mano:
+- editá los datos;
+- armá tus propios grafos y laberintos;
+- hacé correr dos algoritmos cara a cara con la misma entrada.
+
+Todo con estética de consola de 16 bits y sonido sintetizado por código.
 
 **Jugalo en https://josemiguez98.github.io/algo-quest/**. La versión en desarrollo (rama `dev`) está en [`/dev/`](https://josemiguez98.github.io/algo-quest/dev/).
 

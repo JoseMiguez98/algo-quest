@@ -2,7 +2,7 @@
   "name": "algo-quest",
   "private": true,
   "version": "0.1.0",
-  "description": "Visualizaciones educativas de algoritmos con estética de consola de 16 bits y sonido procedural.",
+  "description": "Visualizer y playground de algoritmos de computer science: paso a paso, editable y cara a cara.",
   "license": "MIT",
   "repository": {
     "type": "git",
