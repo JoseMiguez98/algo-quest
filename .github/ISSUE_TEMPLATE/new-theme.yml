@@ -1,5 +1,5 @@
-name: Theme nuevo
-description: Proponé un look & sound nuevo (consola, época, alto contraste…).
+name: New theme
+description: Propose a new look & sound (a console, an era, high contrast…).
 labels: [theme]
 body:
   - type: input
@@ -13,17 +13,17 @@ body:
     id: look
     attributes:
       label: Look
-      description: Paleta, tipografía, renderer (pixel o vectorial) y referencias visuales.
+      description: Palette, typography, renderer (pixel or vector) and visual references.
     validations:
       required: true
   - type: textarea
     id: sound
     attributes:
-      label: Sonido
-      description: Qué chip o estilo emula (APU, FM, PSG, suave…) y si tendría música.
+      label: Sound
+      description: Which chip or style it emulates (APU, FM, PSG, soft…) and whether it would have music.
   - type: checkboxes
     id: doing
     attributes:
-      label: ¿Lo implementás vos?
+      label: Will you implement it?
       options:
-        - label: Quiero implementarlo siguiendo CONTRIBUTING.md
+        - label: I want to implement it following CONTRIBUTING.md
