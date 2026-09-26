@@ -1,25 +1,18 @@
 import '../ui/layout.css';
-import { legacyGraphs } from '../data/legacy-graphs';
 import { byId, algorithms } from '../algorithms/registry';
-import type { GraphInput } from '../algorithms/graph/types';
-import { interpolate, type AlgorithmContent, type AlgorithmDef } from '../core/algorithm';
+import { interpolate, type AlgorithmContent } from '../core/algorithm';
 import { bindHotkeys } from '../core/hotkeys';
 import { Player } from '../core/player';
-import { mulberry32, randomInt } from '../core/rng';
 import { settings } from '../core/settings';
 import { sound } from '../core/sound';
-import { record } from '../core/trace';
-import type { Primitive, Step } from '../core/types';
+import type { Step } from '../core/types';
 import { t } from '../i18n';
-import { BarsScene } from '../scenes/bars';
-import { GraphScene } from '../scenes/graph';
-import type { Scene, SceneFrame } from '../scenes/scene';
-import { BAR_LAYERS } from '../scenes/layers';
-import type { ArrayState } from '../algorithms/sorting/types';
-import type { RadixExtra } from '../algorithms/sorting/radix-sort/algorithm';
 import { Stage } from '../scenes/stage';
-import { allThemes, applyTheme, stageRenderer } from '../themes';
-import { setButtonIcon, ui } from '../ui/components';
+import { applyTheme, stageRenderer } from '../themes';
+import { defaultOptions, initialInput, sceneFor, traceFor } from '../core/session';
+import { algorithmIdFromLocation, homeUrl } from '../core/routes';
+import { createAppTools, onLanguageOrThemeChange } from '../ui/app-tools';
+import { ui } from '../ui/components';
 import { clear, h } from '../ui/dom';
 import { icon } from '../ui/icons';
 import { createCodePanel } from '../ui/panels/code-panel';
@@ -30,50 +23,11 @@ import { createStatsPanel } from '../ui/panels/stats-panel';
 import { createTransport } from '../ui/panels/transport';
 import { structureViews } from '../ui/structures';
 
-type Def = AlgorithmDef<never>;
 type Tab = 'code' | 'info' | 'stats';
-
-function resolveId(): string {
-  const q = new URLSearchParams(location.search).get('algo');
-  if (q) return q;
-  const parts = location.pathname.split('/').filter(Boolean);
-  return parts.at(-1) ?? algorithms[0]!.id;
-}
-
-function defaultOptions(def: Def): Record<string, Primitive> {
-  return Object.fromEntries((def.options ?? []).map((o) => [o.id, o.default]));
-}
-
-function initialInput(def: Def, seed: number | null, fixture?: string): unknown {
-  if (def.input.kind === 'array') {
-    const spec = def.input;
-    if (seed === null) return spec.preset.slice();
-    const rng = mulberry32(seed);
-    return spec.preset.map(() => randomInt(rng, spec.min, spec.max));
-  }
-  const f = legacyGraphs[fixture ?? def.input.fixture];
-  if (!f) throw new Error(`unknown fixture ${fixture ?? def.input.fixture}`);
-  return { graph: f.graph, start: f.start, target: def.input.needsTarget ? f.target : f.target } satisfies GraphInput;
-}
-
-function sceneFor(def: Def, input: unknown): Scene<unknown> {
-  if (def.scene === 'graph') return new GraphScene(input as GraphInput, def.layers ?? []) as Scene<unknown>;
-  const spec = def.input.kind === 'array' ? def.input : null;
-  const layers = (def.layers ?? []).flatMap((id) => (BAR_LAYERS[id] ? [BAR_LAYERS[id]] : []));
-  const label = def.layers?.includes('digits') ? radixLabel : undefined;
-  return new BarsScene(layers, { maxValue: spec?.max, label }) as Scene<unknown>;
-}
-
-function radixLabel(value: number, f: SceneFrame<ArrayState<unknown>>): { text: string; highlight?: number } {
-  const x = f.step.state.extra as RadixExtra;
-  const text = value.toString(x.base).toUpperCase().padStart(Math.max(1, x.passes), '0');
-  const active = x.pass > 0 && f.step.event !== 'done';
-  return { text, highlight: active ? text.length - x.pass : undefined };
-}
 
 async function mount(root: HTMLElement): Promise<void> {
   applyTheme();
-  const def = byId(resolveId());
+  const def = byId(algorithmIdFromLocation(algorithms[0]!.id));
   if (!def) {
     root.replaceChildren(h('p', {}, 'Unknown algorithm'));
     return;
@@ -160,24 +114,11 @@ async function mount(root: HTMLElement): Promise<void> {
   );
   side.classList.add('side-window');
 
-  const soundBtn = ui.button({ label: '', icon: 'sound', iconOnly: true, shortcut: 'M', onClick: () => toggleMute() });
-  const volume = h('input', { type: 'range', min: 0, max: 1, step: 0.05, value: settings.get().volume, 'aria-label': t('sound.volume') });
-  volume.addEventListener('input', () => settings.set({ volume: Number(volume.value), muted: false }));
-  const musicBtn = ui.button({ label: '', icon: 'music', iconOnly: true, onClick: () => { sound.unlock(); settings.set({ music: !settings.get().music }); } });
-  musicBtn.hidden = !sound.hasMusic;
-  const themeSelect = h('select', { class: 'theme-select', 'aria-label': t('theme.label') },
-    ...allThemes().map((th) => h('option', { value: th.id, selected: th.id === settings.get().theme }, th.name)));
-  themeSelect.addEventListener('change', () => settings.set({ theme: themeSelect.value }));
-  const langBtns = (['es', 'en'] as const).map((l) => ui.button({ label: l.toUpperCase(), variant: settings.get().lang === l ? 'default' : 'ghost', pressed: settings.get().lang === l, onClick: () => settings.get().lang !== l && settings.set({ lang: l }) }));
+  const tools = createAppTools([ui.button({ label: t('help.title'), icon: 'help', iconOnly: true, shortcut: '?', onClick: () => help.toggle() })]);
   const bar = h('header', { class: 'app-bar' },
-    h('a', { class: 'ui-button', href: import.meta.env.BASE_URL }, icon('menu'), h('span', { class: 'ui-button__label' }, t('nav.menu'))),
+    h('a', { class: 'ui-button', href: homeUrl() }, icon('menu'), h('span', { class: 'ui-button__label' }, t('nav.menu'))),
     h('div', { class: 'app-bar__title' }, h('h1', { class: 'app-bar__name' }, content.name), h('p', { class: 'app-bar__tagline' }, content.tagline)),
-    h('div', { class: 'app-bar__tools' },
-      h('div', { class: 'lang-switch', role: 'group', 'aria-label': t('lang.label') }, ...langBtns),
-      themeSelect,
-      h('div', { class: 'volume' }, soundBtn, musicBtn, volume),
-      ui.button({ label: t('help.title'), icon: 'help', iconOnly: true, shortcut: '?', onClick: () => help.toggle() }),
-    ),
+    tools.el,
   );
 
   clear(root);
@@ -191,22 +132,6 @@ async function mount(root: HTMLElement): Promise<void> {
   function narrate(step: Step<unknown>): string {
     const tpl = content.narration[step.narration.key];
     return tpl ? interpolate(tpl, step.narration.params) : step.narration.key;
-  }
-
-  function syncSound(): void {
-    const { muted } = settings.get();
-    setButtonIcon(soundBtn, muted ? 'mute' : 'sound', t(muted ? 'sound.off' : 'sound.on'));
-    soundBtn.setAttribute('aria-pressed', String(!muted));
-    const { music } = settings.get();
-    musicBtn.title = t(music ? 'music.on' : 'music.off');
-    musicBtn.setAttribute('aria-label', musicBtn.title);
-    musicBtn.setAttribute('aria-pressed', String(music));
-  }
-
-  function toggleMute(): void {
-    sound.unlock();
-    settings.set({ muted: !settings.get().muted });
-    sound.play('ui-toggle');
   }
 
   function render(): void {
@@ -230,7 +155,7 @@ async function mount(root: HTMLElement): Promise<void> {
     seed = nextSeed;
     input = initialInput(def!, seed, fixture);
     try {
-      steps = record(def!.run(input as never, options));
+      steps = traceFor(def!, input, options);
     } catch (e) {
       narration.textContent = t('error.input', { msg: (e as Error).message });
       return;
@@ -268,7 +193,7 @@ async function mount(root: HTMLElement): Promise<void> {
     shuffle,
     faster: () => player.faster(),
     slower: () => player.slower(),
-    mute: toggleMute,
+    mute: tools.toggleMute,
     code: () => selectTab('code'),
     info: () => selectTab('info'),
     help: () => help.toggle(),
@@ -278,19 +203,13 @@ async function mount(root: HTMLElement): Promise<void> {
   window.addEventListener('pointerdown', unlock, { once: true });
   window.addEventListener('keydown', unlock, { once: true });
 
-  const offSettings = settings.on('change', (s) => {
-    syncSound();
-    volume.value = String(s.volume);
-    if (s.lang !== document.documentElement.lang || s.theme !== document.documentElement.dataset.theme) {
-      unbind();
-      offSettings();
-      player.destroy();
-      stage.destroy();
-      void mount(root);
-    }
-  });
+  onLanguageOrThemeChange(() => {
+    unbind();
+    player.destroy();
+    stage.destroy();
+    void mount(root);
+  }, tools.sync);
 
-  syncSound();
   loadInput(null);
 }
 

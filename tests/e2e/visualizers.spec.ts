@@ -60,3 +60,24 @@ test('options re-run the algorithm', async ({ page }) => {
   await page.locator('.stage-toolbar select').selectOption('first');
   await expect(count).not.toHaveText(before!);
 });
+
+test('home lists every algorithm and opens one from the keyboard', async ({ page }) => {
+  await page.goto('/');
+  const carts = page.locator('.cart');
+  await expect(carts).toHaveCount(IDS.length);
+  await page.getByRole('button', { name: /START/ }).click();
+  await expect(carts.first()).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(carts.nth(1)).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/\/sorting\/selection-sort\/$/);
+  await expect(page.locator('.transport__count')).toContainText(/1\/\d+/);
+});
+
+test('home search filters and explains empty results', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('searchbox').fill('floyd');
+  await expect(page.locator('.cart:visible')).toHaveCount(1);
+  await page.getByRole('searchbox').fill('zzz');
+  await expect(page.locator('.empty')).toBeVisible();
+});
