@@ -63,7 +63,7 @@ Then rebase on the latest `dev`: `git fetch origin && git rebase origin/dev`.
 
 Also check the diff:
 - `package.json` gained no `dependencies`.
-- No image, audio or font files were added (`git diff --stat origin/dev` shows only code and docs).
+- No image, audio or font files were added under `src/` (`git diff --stat origin/dev`). README screenshots go in `docs/media/` only.
 - If a skill was missing a step you needed, the skill is updated in this PR.
 
 Before asking the contributor to open the PR, summarize what you verified by hand: which pages you opened, and which languages and themes you checked. The contributor reviews and owns the PR.

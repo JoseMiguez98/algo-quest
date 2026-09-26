@@ -22,6 +22,7 @@ Algo Quest is a visualizer and playground for computer science algorithms, and i
    - visuals with canvas through the theme renderer, SVG built in code (`src/themes/pixel/svg.ts`) and CSS;
    - sound and music with Web Audio synthesis.
    - The only external resources allowed are UI typefaces from Google Fonts (OFL) and the GoatCounter script in production.
+   - `docs/media/` holds README screenshots only. Never import it from `src/`.
 5. **Bilingual.** Every user-facing string exists in Spanish (rioplatense voseo, with correct accents) and in English.
 6. **References are verified.** Cite only sources you actually opened, and never guess a URL.
 7. **Accessible.**
