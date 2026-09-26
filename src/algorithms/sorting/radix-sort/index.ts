@@ -6,7 +6,7 @@ export default defineAlgorithm<number[]>({
   category: 'sorting',
   scene: 'bars',
   layers: ['counts', 'digits'],
-  input: { kind: 'array', min: 100, max: 999, minN: 4, maxN: 14, preset: [329, 457, 657, 839, 436, 720, 355, 102, 598, 241] },
+  input: { kind: 'array', min: 1, max: 999, minN: 4, maxN: 14, preset: [329, 457, 657, 839, 436, 720, 355, 102, 598, 241] },
   options: [{ id: 'base', values: [10, 16, 4], default: 10 }],
   run: (values, o) => run(values, { base: Number(o.base) }),
   pseudocode,

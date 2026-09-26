@@ -11,3 +11,11 @@ export function algorithmIdFromLocation(fallback: string): string {
   if (q) return q;
   return location.pathname.split('/').filter(Boolean).at(-1) ?? fallback;
 }
+
+export const compareUrl = (a?: string, b?: string): string => {
+  const q = new URLSearchParams();
+  if (a) q.set('a', a);
+  if (b) q.set('b', b);
+  const qs = q.toString();
+  return `${base()}compare/${qs ? `?${qs}` : ''}`;
+};

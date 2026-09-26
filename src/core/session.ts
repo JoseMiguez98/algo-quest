@@ -30,9 +30,9 @@ export function initialInput(def: Def, seed: number | null, fixture?: string): u
   return { graph: f.graph, start: f.start, target: f.target } satisfies GraphInput;
 }
 
-export function sceneFor(def: Def, input: unknown): Scene<unknown> {
+export function sceneFor(def: Def, input: unknown, o: { maxValue?: number } = {}): Scene<unknown> {
   if (def.scene === 'graph') return new GraphScene(input as GraphInput, def.layers ?? []) as Scene<unknown>;
-  const spec = def.input.kind === 'array' ? def.input : null;
+  const spec = def.input.kind === 'array' ? { ...def.input, max: o.maxValue ?? def.input.max } : null;
   const layers = (def.layers ?? []).flatMap((id) => (BAR_LAYERS[id] ? [BAR_LAYERS[id]] : []));
   const label = def.layers?.includes('digits') ? radixLabel : undefined;
   return new BarsScene(layers, { maxValue: spec?.max, label }) as Scene<unknown>;

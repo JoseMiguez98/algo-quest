@@ -22,5 +22,6 @@ export const pseudocode: Pseudocode = [
 
 export function run(input: GraphInput, options: Partial<GreedyOptions> = {}): Generator<GraphStep<BestFirstExtra>> {
   const heuristic = options.heuristic ?? (input.graph.grid ? 'manhattan' : 'euclidean');
-  return bestFirst('greedy', input, heuristicFn(heuristic, input.graph, input.target));
+  // Greedy ranks by h alone, so scaling h would not change its choices; keep raw distances.
+  return bestFirst('greedy', input, heuristicFn(heuristic, input.graph, input.target, 1, false));
 }

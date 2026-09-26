@@ -46,11 +46,18 @@ export function algorithmPages(): Plugin {
       server.middlewares.use((req, _res, next) => {
         const path = (req.url ?? '').split('?')[0]!.replace(server.config.base, '/');
         const match = pages.find((p) => path === `/${p.category}/${p.id}/` || path === `/${p.category}/${p.id}`);
-        if (match) req.url = `${server.config.base}visualizer.html`;
+        const query = (req.url ?? '').includes('?') ? `?${(req.url ?? '').split('?')[1]}` : '';
+        if (match) req.url = `${server.config.base}visualizer.html${query}`;
+        if (path === '/compare/' || path === '/compare') req.url = `${server.config.base}compare.html${query}`;
         next();
       });
     },
     closeBundle() {
+      const compare = join(outDir, 'compare.html');
+      if (existsSync(compare)) {
+        mkdirSync(join(outDir, 'compare'), { recursive: true });
+        writeFileSync(join(outDir, 'compare', 'index.html'), readFileSync(compare, 'utf8'));
+      }
       const template = join(outDir, 'visualizer.html');
       if (!existsSync(template)) return;
       const html = readFileSync(template, 'utf8');

@@ -98,3 +98,15 @@ export function pathCost(g: Graph, path: readonly number[]): number {
   }
   return cost;
 }
+
+/** Path cost using the lightest edge between consecutive nodes (parallel edges allowed). */
+export function cheapestCost(g: Graph, path: readonly number[]): number {
+  let cost = 0;
+  for (let i = 1; i < path.length; i++) {
+    const [a, b] = [path[i - 1]!, path[i]!];
+    const ws = g.edges.filter((e) => (e.from === a && e.to === b) || (!g.directed && e.from === b && e.to === a)).map((e) => e.weight);
+    if (!ws.length) throw new Error(`no edge ${a}→${b}`);
+    cost += Math.min(...ws);
+  }
+  return cost;
+}
