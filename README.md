@@ -2,9 +2,9 @@
 
 # 🎮 Algo Quest
 
-**Un visualizer y playground de algoritmos de computer science, con alma de consola de 16 bits.**
+**A visualizer and playground for computer science algorithms, with the soul of a 16-bit console.**
 
-[![Jugar ahora](https://img.shields.io/badge/▶_jugar_ahora-josemiguez98.github.io-ffd800?style=for-the-badge&labelColor=000024)](https://josemiguez98.github.io/algo-quest/)
+[![Play now](https://img.shields.io/badge/▶_play_now-josemiguez98.github.io-ffd800?style=for-the-badge&labelColor=000024)](https://josemiguez98.github.io/algo-quest/)
 
 [![GitHub stars](https://img.shields.io/github/stars/JoseMiguez98/algo-quest?style=flat&logo=github&label=stars)](https://github.com/JoseMiguez98/algo-quest/stargazers)
 [![CI](https://github.com/JoseMiguez98/algo-quest/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/JoseMiguez98/algo-quest/actions/workflows/ci.yml)
@@ -13,156 +13,156 @@
 <br>
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white)](tsconfig.json)
 [![Runtime dependencies: 0](https://img.shields.io/badge/runtime_deps-0-brightgreen)](package.json)
-[![Assets: 100% code](https://img.shields.io/badge/assets-100%25_c%C3%B3digo-ff5ed1)](#-hecho-100--con-código)
-[![PRs welcome](https://img.shields.io/badge/PRs-bienvenidos-brightgreen)](CONTRIBUTING.md)
+[![Assets: 100% code](https://img.shields.io/badge/assets-100%25_code-ff5ed1)](#-made-100--with-code)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](CONTRIBUTING.md)
 [![AI agents ready](https://img.shields.io/badge/AI_agents-ready-8a2be2)](AGENTS.md)
 
-<img src="docs/media/demo.gif" alt="Heap Sort animándose paso a paso en el theme Mega Drive, con el pseudocódigo resaltado al costado" width="800">
+<img src="docs/media/demo.gif" alt="Heap Sort animating step by step in the Mega Drive theme, with the pseudocode highlighted alongside" width="800">
 
-**[Jugar](https://josemiguez98.github.io/algo-quest/)** · **[Contribuir](CONTRIBUTING.md)** · **[Reportar un bug](https://github.com/JoseMiguez98/algo-quest/issues/new?template=bug.yml)** · **[Pedir un algoritmo](https://github.com/JoseMiguez98/algo-quest/issues/new?template=new-algorithm.yml)**
+**[Play](https://josemiguez98.github.io/algo-quest/)** · **[Contribute](CONTRIBUTING.md)** · **[Report a bug](https://github.com/JoseMiguez98/algo-quest/issues/new?template=bug.yml)** · **[Request an algorithm](https://github.com/JoseMiguez98/algo-quest/issues/new?template=new-algorithm.yml)**
 
 </div>
 
 > [!TIP]
-> ⭐ **¿Te gusta Algo Quest? Dejale una estrella al repo.** Es gratis, ayuda a que más gente lo encuentre y nos
-> motiva a sumar algoritmos nuevos.
+> ⭐ **Like Algo Quest? Give the repo a star.** It's free, it helps more people find it, and it motivates us to
+> add new algorithms.
 
-## ✨ Qué podés hacer
+## ✨ What you can do
 
-Mirá paso a paso cómo ordenan los sorts y cómo recorren los algoritmos de grafos. Después meté mano.
+Watch, step by step, how sorts put things in order and how graph algorithms explore. Then get your hands dirty.
 
-- 🔍 **Paso a paso, hacia adelante y hacia atrás.** Cada comparación se ve, se escucha y se explica en una narración.
-- 📜 **Pseudocódigo en vivo.** La línea que se está ejecutando se resalta, junto a las variables del momento.
-- 🧪 **Playground.** Editá los datos, arrastrá barras, armá tus propios grafos y laberintos, y compartilos por URL.
-- ⚔️ **Modo versus.** Dos algoritmos con la misma entrada, cara a cara, con marcador en vivo.
-- 🕹️ **Tres estilos.** Mega Drive, RPG de 8 bits y Moderno, cada uno con su propio sonido sintetizado.
-- 🌎 **Español e inglés**, navegable con teclado y auditado con axe (WCAG AA).
+- 🔍 **Step by step, forward and backward.** Every comparison is shown, heard and explained in a narration.
+- 📜 **Live pseudocode.** The line being executed is highlighted, next to the current variables.
+- 🧪 **Playground.** Edit the data, drag bars, build your own graphs and mazes, and share them by URL.
+- ⚔️ **Versus mode.** Two algorithms on the same input, head to head, with a live scoreboard.
+- 🕹️ **Three styles.** Mega Drive, 8-bit RPG and Modern, each with its own synthesized sound.
+- 🌎 **Spanish and English**, keyboard navigable and audited with axe (WCAG AA).
 
-**19 algoritmos** en dos mundos:
+**19 algorithms** across two worlds:
 
-| Mundo | Algoritmos |
+| World | Algorithms |
 |---|---|
-| 1 · Ordenamiento | Bubble · Selection · Insertion · Shell · Merge · Quick · Heap · Counting · Radix · Bucket |
-| 2 · Grafos y recorridos | BFS · DFS · BFS bidireccional · Dijkstra · A* · Greedy best-first · Bellman-Ford · Floyd-Warshall · Backtracking (laberinto) |
+| 1 · Sorting | Bubble · Selection · Insertion · Shell · Merge · Quick · Heap · Counting · Radix · Bucket |
+| 2 · Graphs and traversals | BFS · DFS · Bidirectional BFS · Dijkstra · A* · Greedy best-first · Bellman-Ford · Floyd-Warshall · Backtracking (maze) |
 
-## 📸 Capturas
+## 📸 Screenshots
 
-| Portada | Quick Sort |
+| Home | Quick Sort |
 |---|---|
-| <img src="docs/media/home.png" alt="Portada con el logo de Algo Quest y una demo de Floyd-Warshall" width="420"> | <img src="docs/media/sorting.png" alt="Quick Sort en plena partición, con el pseudocódigo resaltado" width="420"> |
-| **A\*** | **Modo versus** |
-| <img src="docs/media/graph.png" alt="A* explorando un grafo con los valores g+h sobre cada nodo" width="420"> | <img src="docs/media/compare.png" alt="Bubble Sort contra Quick Sort con los mismos datos" width="420"> |
+| <img src="docs/media/home.png" alt="Home page with the Algo Quest logo and a Floyd-Warshall demo" width="420"> | <img src="docs/media/sorting.png" alt="Quick Sort mid-partition, with the pseudocode highlighted" width="420"> |
+| **A\*** | **Versus mode** |
+| <img src="docs/media/graph.png" alt="A* exploring a graph with the g+h values over each node" width="420"> | <img src="docs/media/compare.png" alt="Bubble Sort versus Quick Sort on the same data" width="420"> |
 | **Playground** | **Mobile** |
-| <img src="docs/media/playground.png" alt="Editor de grafos de Dijkstra con herramientas para mover nodos y aristas" width="420"> | <img src="docs/media/mobile.png" alt="Merge Sort en un teléfono, con los controles tipo gamepad" width="200"> |
+| <img src="docs/media/playground.png" alt="Dijkstra graph editor with tools to move nodes and edges" width="420"> | <img src="docs/media/mobile.png" alt="Merge Sort on a phone, with gamepad-style controls" width="200"> |
 
-## 🚀 Correrlo en tu máquina
+## 🚀 Run it locally
 
 ```bash
 npm install
 npm run dev        # http://localhost:5180
-npm test           # tests de exactitud (Vitest + fast-check)
-npm run e2e        # tests end-to-end y de accesibilidad (Playwright + axe)
-npm run build      # sitio estático en dist/
+npm test           # accuracy tests (Vitest + fast-check)
+npm run e2e        # end-to-end and accessibility tests (Playwright + axe)
+npm run build      # static site in dist/
 ```
 
-Para publicar en una subcarpeta (por ejemplo GitHub Pages en `/algo-quest/`): `BASE_PATH=/algo-quest/ npm run build`.
-El deploy lo hace `.github/workflows/deploy.yml` en cada push a `main` o a `dev`.
-El resultado en `dist/` es 100 % estático: una página por algoritmo (`/sorting/quick-sort/`), la portada y `/compare/`.
+To publish under a subfolder (for example GitHub Pages at `/algo-quest/`): `BASE_PATH=/algo-quest/ npm run build`.
+Deployment is handled by `.github/workflows/deploy.yml` on every push to `main` or `dev`.
+The output in `dist/` is 100 % static: one page per algorithm (`/sorting/quick-sort/`), the home page and `/compare/`.
 
-## 🧱 Hecho 100 % con código
+## 🧱 Made 100 % with code
 
-**No hay librerías en runtime.** `package.json` no tiene `dependencies`: el sitio es TypeScript vanilla. Vite,
-Vitest, Playwright y compañía son herramientas de build y de test, y no llegan al navegador.
+**No runtime libraries.** `package.json` has no `dependencies`: the site is vanilla TypeScript. Vite, Vitest,
+Playwright and friends are build and test tools, and never reach the browser.
 
-**El sitio no trae ni un archivo de imagen ni de audio.** Todo lo que ves y escuchás se genera en el momento. Las capturas de `docs/media/` existen solo para este README y no se publican con el sitio.
+**The site ships not a single image or audio file.** Everything you see and hear is generated on the fly. The screenshots in `docs/media/` exist only for this README and are not published with the site.
 
-| Qué | Cómo se hace |
+| What | How it's made |
 |---|---|
-| Barras, nodos, grillas y animaciones | Canvas dibujado por el renderer de cada theme |
-| Marcos de ventana, botones e íconos | SVG armado en código, pixel por pixel |
-| Fondos, estrellas y montañas | SVG pixel art generado con una semilla (`src/themes/megadrive/decor.ts`) y CSS |
-| Texto dentro del canvas | Una fuente bitmap de 5×7 definida en `src/themes/pixel/bitmap-font.ts` |
-| Efectos y música | Web Audio: ondas de pulso, triángulo, ruido LFSR y síntesis FM de 2 operadores, con música procedural |
+| Bars, nodes, grids and animations | Canvas drawn by each theme's renderer |
+| Window frames, buttons and icons | SVG built in code, pixel by pixel |
+| Backgrounds, stars and mountains | Seeded pixel-art SVG (`src/themes/megadrive/decor.ts`) and CSS |
+| Text inside the canvas | A 5×7 bitmap font defined in `src/themes/pixel/bitmap-font.ts` |
+| Sound effects and music | Web Audio: pulse and triangle waves, LFSR noise and 2-operator FM synthesis, with procedural music |
 
-**Recursos externos**, a la vista:
-- Las tipografías de la interfaz (Press Start 2P, Pixelify Sans e Inter, todas con licencia OFL) se cargan desde Google Fonts.
-- En producción se carga el contador de [GoatCounter](#-métricas).
+**External resources**, in plain sight:
+- The UI typefaces (Press Start 2P, Pixelify Sans and Inter, all OFL-licensed) are loaded from Google Fonts.
+- In production, the [GoatCounter](#-metrics) counter is loaded.
 
-Esa regla vale también para los aportes: nada de dependencias en runtime ni de archivos de assets.
+The same rule applies to contributions: no runtime dependencies and no asset files.
 
-## 🗂️ Cómo está organizado
+## 🗂️ How it's organized
 
-| Carpeta | Qué hay |
+| Folder | What's inside |
 |---|---|
-| `src/algorithms/<categoría>/<id>/` | Un algoritmo: núcleo puro, tests, definición y textos ES/EN |
-| `src/core/` | Player (paso adelante/atrás), trazas, hotkeys, settings, sonido, sesión, rutas |
-| `src/scenes/` | Escenas que dibujan estados (`bars`, `graph`) y capas reutilizables (`layers/`) |
-| `src/themes/` | Contrato de theme y los themes (`megadrive`, `rpg`, `modern`) |
-| `src/ui/` | Componentes y paneles independientes del theme |
-| `src/playground/` | Editores de datos, grafos y grillas; estado compartible por URL |
-| `src/pages/` | Portada, visualizer y comparador |
-| `docs/fidelity.md` | Qué variante implementa cada algoritmo y qué invariantes se testean |
+| `src/algorithms/<category>/<id>/` | One algorithm: pure core, tests, definition and ES/EN texts |
+| `src/core/` | Player (step forward/back), traces, hotkeys, settings, sound, session, routes |
+| `src/scenes/` | Scenes that draw states (`bars`, `graph`) and reusable layers (`layers/`) |
+| `src/themes/` | Theme contract and the themes (`megadrive`, `rpg`, `modern`) |
+| `src/ui/` | Theme-independent components and panels |
+| `src/playground/` | Data, graph and grid editors; URL-shareable state |
+| `src/pages/` | Home, visualizer and comparator |
+| `docs/fidelity.md` | Which variant each algorithm implements and which invariants are tested |
 
-La regla central: **los algoritmos solo emiten eventos semánticos** (`compare`, `swap`, `visit`, `relax`…) con un
-snapshot inmutable del estado. Nunca conocen colores, sonidos ni el DOM. Las escenas traducen el estado a primitivas
-(`bar`, `node`, `edge`…), y el theme decide cómo se ve y suena cada una.
+The core rule: **algorithms only emit semantic events** (`compare`, `swap`, `visit`, `relax`…) with an immutable
+snapshot of the state. They never know about colors, sounds or the DOM. Scenes translate the state into primitives
+(`bar`, `node`, `edge`…), and the theme decides how each one looks and sounds.
 
-## 🤖 Contribuir con AI agents
+## 🤖 Contributing with AI agents
 
-Algo Quest está pensado para contribuir **trabajando junto a un AI agent**. El repo trae las instrucciones que el
-agente necesita, así que cualquiera que colabore sigue los mismos pasos, las mismas reglas y la misma vara de calidad:
+Algo Quest is designed for contributing **side by side with an AI agent**. The repo ships the instructions the
+agent needs, so every contributor follows the same steps, the same rules and the same quality bar:
 
-| Archivo | Para qué |
+| File | Purpose |
 |---|---|
-| [`AGENTS.md`](AGENTS.md) | Reglas del proyecto para cualquier agente (Claude Code, Cursor, Codex, Copilot…) |
-| [`.claude/skills/add-algorithm`](.claude/skills/add-algorithm/SKILL.md) | Agregar un algoritmo o una categoría: núcleo, tests contra referencia, contenido ES/EN y registro |
-| [`.claude/skills/add-theme`](.claude/skills/add-theme/SKILL.md) | Crear un theme: tokens, CSS, renderer, sonidos y auditoría de accesibilidad |
-| [`.claude/skills/contribute`](.claude/skills/contribute/SKILL.md) | Ramas, commits, PRs, releases y hotfixes |
+| [`AGENTS.md`](AGENTS.md) | Project rules for any agent (Claude Code, Cursor, Codex, Copilot…) |
+| [`.claude/skills/add-algorithm`](.claude/skills/add-algorithm/SKILL.md) | Add an algorithm or a category: core, tests against a reference, ES/EN content and registration |
+| [`.claude/skills/add-theme`](.claude/skills/add-theme/SKILL.md) | Create a theme: tokens, CSS, renderer, sounds and accessibility audit |
+| [`.claude/skills/contribute`](.claude/skills/contribute/SKILL.md) | Branches, commits, PRs, releases and hotfixes |
 
-Con [Claude Code](https://claude.com/claude-code) las skills se activan solas: pedile "agregá comb sort" o "haceme
-un theme de Game Boy" y sigue el checklist completo. Con otro agente, apuntalo a `AGENTS.md`. Si preferís trabajar
-sin agente, las skills se leen como checklists comunes.
+With [Claude Code](https://claude.com/claude-code) the skills kick in on their own: ask it to "add comb sort" or
+"make me a Game Boy theme" and it follows the full checklist. With another agent, point it to `AGENTS.md`. If you'd
+rather work without an agent, the skills read as plain checklists.
 
-Cómo empezar:
-1. Leé [CONTRIBUTING.md](CONTRIBUTING.md).
-2. Creá tu rama desde `dev`.
-3. Abrí el PR hacia `dev`. `main` es producción.
+Getting started:
+1. Read [CONTRIBUTING.md](CONTRIBUTING.md).
+2. Create your branch from `dev`.
+3. Open the PR into `dev`. `main` is production.
 
-Si encontrás un paso que el agente no supo resolver, **mejorar la skill también es un aporte**: así el próximo
-colaborador no se choca con lo mismo.
+If you hit a step the agent couldn't figure out, **improving the skill is a contribution too**: that way the next
+contributor won't run into the same wall.
 
-## 📊 Métricas
+## 📊 Metrics
 
-El sitio publicado cuenta visitas y eventos de uso (play, paso atrás, edición, comparaciones) con
-[GoatCounter](https://www.goatcounter.com/). GoatCounter no usa cookies ni datos personales, y respeta *Do Not Track*.
-Solo se activa en producción cuando existe la variable `VITE_GOATCOUNTER`; ni en local ni en `/dev/` se envía nada.
-El código está en `src/core/analytics.ts`.
+The published site counts visits and usage events (play, step back, edit, comparisons) with
+[GoatCounter](https://www.goatcounter.com/). GoatCounter uses no cookies or personal data, and respects *Do Not Track*.
+It only turns on in production when the `VITE_GOATCOUNTER` variable is set; nothing is sent locally or from `/dev/`.
+The code lives in `src/core/analytics.ts`.
 
-## ⌨️ Atajos de teclado
+## ⌨️ Keyboard shortcuts
 
-`Espacio` play/pausa · `→`/`←` paso · `Home`/`End` inicio/fin · `R` reiniciar · `N` datos nuevos · `+`/`−` velocidad ·
-`M` sonido · `E` modo edición · `C` código · `I` info · `?` ayuda · `Esc` cerrar.
+`Space` play/pause · `→`/`←` step · `Home`/`End` start/end · `R` restart · `N` new data · `+`/`−` speed ·
+`M` sound · `E` edit mode · `C` code · `I` info · `?` help · `Esc` close.
 
-## 💜 Colaboradores
+## 💜 Contributors
 
-Gracias a todas las personas que suman algoritmos, themes, traducciones y fixes.
+Thanks to everyone who adds algorithms, themes, translations and fixes.
 
 <a href="https://github.com/JoseMiguez98/algo-quest/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=JoseMiguez98/algo-quest" alt="Colaboradores de Algo Quest">
+  <img src="https://contrib.rocks/image?repo=JoseMiguez98/algo-quest" alt="Algo Quest contributors">
 </a>
 
-## ⭐ Historial de estrellas
+## ⭐ Star history
 
 <a href="https://star-history.com/#JoseMiguez98/algo-quest&Date">
-  <img src="https://api.star-history.com/svg?repos=JoseMiguez98/algo-quest&type=Date" alt="Gráfico del historial de estrellas" width="600">
+  <img src="https://api.star-history.com/svg?repos=JoseMiguez98/algo-quest&type=Date" alt="Star history chart" width="600">
 </a>
 
-## 📄 Licencia
+## 📄 License
 
 [MIT](LICENSE) © 2026 JoseMiguez98
 
 <div align="center">
 
-**Si Algo Quest te sirvió o te divirtió, ⭐ dejale una estrella: es la mejor forma de apoyar el proyecto.**
+**If Algo Quest helped you or made you smile, ⭐ give it a star: it's the best way to support the project.**
 
 </div>

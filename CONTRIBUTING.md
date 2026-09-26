@@ -1,198 +1,186 @@
-# 🤝 Cómo contribuir a Algo Quest
+# 🤝 Contributing to Algo Quest
 
-[![PRs welcome](https://img.shields.io/badge/PRs-bienvenidos-brightgreen)](#-checklist-del-pr)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](#-pr-checklist)
 [![AI agents ready](https://img.shields.io/badge/AI_agents-ready-8a2be2)](AGENTS.md)
 [![Runtime dependencies: 0](https://img.shields.io/badge/runtime_deps-0-brightgreen)](package.json)
 [![Good first issues](https://img.shields.io/github/issues/JoseMiguez98/algo-quest/good%20first%20issue?label=good%20first%20issues&color=7057ff)](https://github.com/JoseMiguez98/algo-quest/labels/good%20first%20issue)
 
-> **English summary.** Algo Quest is a visualizer and playground for computer science algorithms, and **it is built to be extended with AI agents**.
->
-> [`AGENTS.md`](AGENTS.md) and the shared skills in [`.claude/skills/`](.claude/skills/) give every contributor's agent the same workflow and quality bar.
->
-> The ground rules:
-> - Accuracy first: every algorithm core is property-tested against an independent reference.
-> - Zero runtime dependencies.
-> - No image or audio files: everything is drawn and synthesized in code.
-> - Content ships in both Spanish and English.
->
-> Branch off `dev`, open your PR into `dev`, and keep `npm run typecheck && npm test && npm run e2e && npm run build` green. Issues and PRs in English are welcome.
-
-¡Gracias por sumarte! Podés aportar de muchas formas: un algoritmo nuevo, un theme, una traducción, un bug, una referencia mejor o una explicación más clara.
+Thanks for joining in! There are many ways to contribute: a new algorithm, a theme, a translation, a bug report, a better reference or a clearer explanation. Issues and PRs are welcome in English or Spanish.
 
 > [!TIP]
-> ⭐ **Si todavía no lo hiciste, dejale una estrella al repo.** Ayuda a que más gente encuentre el proyecto, y más
-> gente significa más algoritmos y más themes.
+> ⭐ **If you haven't yet, give the repo a star.** It helps more people find the project, and more people means
+> more algorithms and more themes.
 >
-> ¿Buscás por dónde empezar? Mirá los issues con la etiqueta
+> Looking for a place to start? Check the issues labeled
 > [`good first issue`](https://github.com/JoseMiguez98/algo-quest/labels/good%20first%20issue).
 
-## 🤖 Contribuir con un AI agent
+## 🤖 Contributing with an AI agent
 
-Este repo está pensado para que contribuyas **trabajando junto a un AI agent**. El objetivo es que todos sigamos los mismos pasos y la misma vara de calidad, sin importar quién escriba el código.
+This repo is designed for you to contribute **side by side with an AI agent**. The goal is for all of us to follow the same steps and the same quality bar, no matter who writes the code.
 
-| Archivo | Qué le da al agente |
+| File | What it gives the agent |
 |---|---|
-| [`AGENTS.md`](AGENTS.md) | Las reglas del proyecto. Lo leen Claude Code (vía `CLAUDE.md`), Cursor, Codex, Copilot y otros |
-| [`.claude/skills/add-algorithm`](.claude/skills/add-algorithm/SKILL.md) | El paso a paso para agregar un algoritmo o una categoría |
-| [`.claude/skills/add-theme`](.claude/skills/add-theme/SKILL.md) | El paso a paso para crear un theme |
-| [`.claude/skills/contribute`](.claude/skills/contribute/SKILL.md) | Ramas, commits, PRs, releases y hotfixes |
+| [`AGENTS.md`](AGENTS.md) | The project rules. Read by Claude Code (via `CLAUDE.md`), Cursor, Codex, Copilot and others |
+| [`.claude/skills/add-algorithm`](.claude/skills/add-algorithm/SKILL.md) | The step-by-step guide to adding an algorithm or a category |
+| [`.claude/skills/add-theme`](.claude/skills/add-theme/SKILL.md) | The step-by-step guide to creating a theme |
+| [`.claude/skills/contribute`](.claude/skills/contribute/SKILL.md) | Branches, commits, PRs, releases and hotfixes |
 
-**Cómo trabajar:**
+**How to work:**
 
-1. Con [Claude Code](https://claude.com/claude-code), las skills se activan solas. Pedí "agregá comb sort" o "haceme un theme de Game Boy" y el agente sigue el checklist completo.
-2. Con otro agente, indicale que lea `AGENTS.md` y la skill que corresponda antes de empezar.
-3. **Vos seguís siendo responsable del PR.**
-   - Revisá lo que generó el agente.
-   - Abrí el visualizer y miralo paso a paso.
-   - Verificá las referencias.
-   - El agente nunca debería hacer push ni abrir PRs sin tu OK.
-4. Si el agente se trabó en algo que la skill no explicaba, **mejorar la skill en el mismo PR (o en otro) también es un aporte**. Las skills son documentación viva.
+1. With [Claude Code](https://claude.com/claude-code), the skills kick in on their own. Ask it to "add comb sort" or "make me a Game Boy theme" and the agent follows the full checklist.
+2. With another agent, tell it to read `AGENTS.md` and the matching skill before starting.
+3. **You remain responsible for the PR.**
+   - Review what the agent produced.
+   - Open the visualizer and watch it step by step.
+   - Verify the references.
+   - The agent should never push or open PRs without your OK.
+4. If the agent got stuck on something the skill didn't explain, **improving the skill in the same PR (or another one) is a contribution too**. Skills are living documentation.
 
-Sin agente también podés contribuir: las skills se leen como checklists comunes.
+You can contribute without an agent as well: the skills read as plain checklists.
 
-## 🧭 Antes de empezar
+## 🧭 Before you start
 
-- Para cambios grandes (una categoría nueva, un theme, cambios de arquitectura), abrí primero un issue con la plantilla correspondiente. Así acordamos el enfoque antes de que inviertas tiempo.
-- Para algo chico (un typo, un bug evidente), mandá el PR directamente.
-- Al participar aceptás el [Código de Conducta](CODE_OF_CONDUCT.md).
+- For big changes (a new category, a theme, architecture changes), open an issue first using the matching template. That way we agree on the approach before you invest time.
+- For something small (a typo, an obvious bug), send the PR directly.
+- By participating you agree to the [Code of Conduct](CODE_OF_CONDUCT.md).
 
-## 🛠️ Preparar el entorno
+## 🛠️ Set up your environment
 
-Requiere Node 20 o superior.
+Requires Node 20 or later.
 
 ```bash
 git clone https://github.com/JoseMiguez98/algo-quest.git
 cd algo-quest
 git switch dev
 npm install
-npx playwright install chromium   # solo la primera vez, para los e2e
+npx playwright install chromium   # first time only, for the e2e tests
 npm run dev                       # http://localhost:5180
 ```
 
-| Comando | Qué hace |
+| Command | What it does |
 |---|---|
-| `npm test` | Tests de exactitud (Vitest + fast-check) |
-| `npm run e2e` | End-to-end y accesibilidad (Playwright + axe) |
-| `npm run typecheck` | TypeScript estricto |
-| `npm run build` | Sitio estático en `dist/` |
+| `npm test` | Accuracy tests (Vitest + fast-check) |
+| `npm run e2e` | End-to-end and accessibility (Playwright + axe) |
+| `npm run typecheck` | Strict TypeScript |
+| `npm run build` | Static site in `dist/` |
 
-## 🏗️ La arquitectura en una línea
+## 🏗️ The architecture in one line
 
-**Los algoritmos solo emiten eventos semánticos** (`compare`, `swap`, `visit`, `relax`…) con un snapshot inmutable del estado. Nunca conocen colores, sonidos ni el DOM.
+**Algorithms only emit semantic events** (`compare`, `swap`, `visit`, `relax`…) with an immutable snapshot of the state. They never know about colors, sounds or the DOM.
 
-A partir de esos eventos:
-- las escenas (`src/scenes/`) traducen el estado a primitivas;
-- el theme (`src/themes/`) decide cómo se ve y cómo suena cada una.
+From those events:
+- scenes (`src/scenes/`) translate the state into primitives;
+- the theme (`src/themes/`) decides how each one looks and sounds.
 
-El mapa completo de carpetas está en el [README](README.md).
+The full folder map is in the [README](README.md).
 
-## 🧱 Todo se hace con código
+## 🧱 Everything is made with code
 
-Algo Quest no tiene librerías en runtime ni archivos de assets. Los aportes tienen que respetar lo mismo:
+Algo Quest has no runtime libraries and no asset files. Contributions must respect the same:
 
-- **Sin dependencias en runtime.** `package.json` no tiene `dependencies` y así se queda. Si una herramienta de desarrollo nueva hace falta, se discute antes en un issue.
-- **Sin imágenes, audio ni fuentes de íconos.** Las alternativas son estas:
+- **No runtime dependencies.** `package.json` has no `dependencies` and it stays that way. If a new dev tool is needed, discuss it in an issue first.
+- **No images, audio or icon fonts.** These are the alternatives:
 
-| En lugar de | Usá |
+| Instead of | Use |
 |---|---|
-| PNG, JPG o GIF, sprites | Primitivas del renderer del theme (canvas), o SVG armado en código con `src/themes/pixel/svg.ts` |
-| Íconos | `src/ui/icons.ts`: íconos 8×8 definidos pixel por pixel |
-| MP3 o WAV | Cues del `SoundPack` sintetizados con Web Audio |
-| Música grabada | Un `MusicTrack` procedural |
+| PNG, JPG or GIF, sprites | Theme renderer primitives (canvas), or SVG built in code with `src/themes/pixel/svg.ts` |
+| Icons | `src/ui/icons.ts`: 8×8 icons defined pixel by pixel |
+| MP3 or WAV | `SoundPack` cues synthesized with Web Audio |
+| Recorded music | A procedural `MusicTrack` |
 
-Las únicas excepciones son las tipografías de la interfaz desde Google Fonts (con licencia OFL) y el contador de GoatCounter en producción. Las capturas y GIFs de `docs/media/` sirven solo para documentar en el README y nunca se importan desde `src/`.
+The only exceptions are the UI typefaces from Google Fonts (OFL-licensed) and the GoatCounter counter in production. The screenshots and GIFs in `docs/media/` are only for documenting the README and are never imported from `src/`.
 
-## 🎯 La vara de exactitud
+## 🎯 The accuracy bar
 
-Es un sitio para aprender, así que un algoritmo mal mostrado es peor que ninguno. Para que se acepte un algoritmo:
+This is a site for learning, so a wrongly shown algorithm is worse than none. For an algorithm to be accepted:
 
-1. **Núcleo puro y grabado.** Un generador que solo toca los datos a través de `SortRecorder` o `GraphRecorder`, para que los contadores sean honestos.
-2. **Tests contra una referencia independiente.**
-   - Tests de propiedades con fast-check que comparan el resultado y los contadores contra una implementación de referencia escrita aparte.
-   - Tests de los invariantes propios del algoritmo.
-3. **Rasgos demostrados.**
-   - Si dice "estable", hay un test de estabilidad.
-   - Si dice "no estable", hay un caso concreto que lo muestra.
-   - Si dice "óptimo", sus costos coinciden con la referencia.
-4. **Una fila en [`docs/fidelity.md`](docs/fidelity.md)** con la variante implementada, la referencia y los invariantes testeados.
+1. **Pure, recorded core.** A generator that only touches the data through `SortRecorder` or `GraphRecorder`, so the counters stay honest.
+2. **Tests against an independent reference.**
+   - fast-check property tests that compare the result and the counters against a separately written reference implementation.
+   - Tests for the algorithm's own invariants.
+3. **Proven traits.**
+   - If it says "stable", there's a stability test.
+   - If it says "not stable", there's a concrete case that shows it.
+   - If it says "optimal", its costs match the reference.
+4. **A row in [`docs/fidelity.md`](docs/fidelity.md)** with the implemented variant, the reference and the tested invariants.
 
-Nunca se debilita un test para que pase: se corrige el algoritmo.
+A test is never weakened to make it pass: the algorithm gets fixed.
 
-## ➕ Agregar un algoritmo
+## ➕ Adding an algorithm
 
-Seguí el checklist de [`.claude/skills/add-algorithm/SKILL.md`](.claude/skills/add-algorithm/SKILL.md). Resumen:
+Follow the checklist in [`.claude/skills/add-algorithm/SKILL.md`](.claude/skills/add-algorithm/SKILL.md). Summary:
 
-1. Creá `src/algorithms/<categoría>/<id>/` con estos archivos:
-   - `algorithm.ts` (pseudocódigo + `run`);
+1. Create `src/algorithms/<category>/<id>/` with these files:
+   - `algorithm.ts` (pseudocode + `run`);
    - `algorithm.test.ts`;
-   - `content.es.ts` y `content.en.ts`;
+   - `content.es.ts` and `content.en.ts`;
    - `index.ts` (`defineAlgorithm`).
-2. Agregá una línea en `src/algorithms/registry.ts` y una fila en `docs/fidelity.md`.
-3. El menú, la URL, los controles, el playground, el comparador y los e2e lo toman solos.
+2. Add a line in `src/algorithms/registry.ts` and a row in `docs/fidelity.md`.
+3. The menu, the URL, the controls, the playground, the comparator and the e2e tests pick it up on their own.
 
-Si usás [Claude Code](https://claude.com/claude-code), pedile "agregá el algoritmo X": la skill `add-algorithm` lo guía paso a paso. Si no lo usás, el mismo archivo sirve como checklist.
+If you use [Claude Code](https://claude.com/claude-code), ask it to "add algorithm X": the `add-algorithm` skill guides it step by step. If you don't, the same file works as a checklist.
 
-Para una **categoría nueva** (árboles, strings, geometría…), abrí primero un issue: la skill lista todo lo que hay que tocar.
+For a **new category** (trees, strings, geometry…), open an issue first: the skill lists everything that needs to change.
 
-## 🎨 Agregar un theme
+## 🎨 Adding a theme
 
-Seguí [`.claude/skills/add-theme/SKILL.md`](.claude/skills/add-theme/SKILL.md). Un theme implementa `Theme` (`src/themes/contract.ts`) y tiene cuatro partes:
+Follow [`.claude/skills/add-theme/SKILL.md`](.claude/skills/add-theme/SKILL.md). A theme implements `Theme` (`src/themes/contract.ts`) and has four parts:
 
-1. **Tokens:** todos los `RequiredColor` y un color por estado visual.
-2. **CSS:** el skin de todos los componentes.
-3. **Renderer:** `PixelRenderer` con un estilo propio, o uno nuevo.
-4. **Sound pack:** todos los cues, sintetizados con Web Audio y sin archivos de audio.
+1. **Tokens:** every `RequiredColor` and one color per visual state.
+2. **CSS:** the skin for every component.
+3. **Renderer:** `PixelRenderer` with its own style, or a new one.
+4. **Sound pack:** every cue, synthesized with Web Audio and with no audio files.
 
-Tiene que pasar la auditoría de accesibilidad (`tests/e2e/a11y.spec.ts`) sin violaciones, incluido el contraste AA.
+It must pass the accessibility audit (`tests/e2e/a11y.spec.ts`) with no violations, AA contrast included.
 
-## 🌎 Contenido y traducciones
+## 🌎 Content and translations
 
-- Todo texto visible existe en **español y en inglés**.
-  - La UI está en `src/i18n/`.
-  - Los algoritmos, en `content.es.ts` y `content.en.ts`.
-  - `src/algorithms/content.test.ts` falla si falta una clave.
-- El español usa voseo rioplatense ("elegí", "levantá") con tildes correctas.
-- Cada algoritmo cita **2–3 referencias que abriste y verificaste**: Wikipedia, CLRS o Sedgewick, cp-algorithms, VisuAlgo. No se inventan URLs.
-- Las narraciones explican el *por qué* de cada paso, no solo el *qué*: "7 > 3 → se intercambian".
+- Every visible string exists in **Spanish and English**.
+  - The UI lives in `src/i18n/`.
+  - Algorithms, in `content.es.ts` and `content.en.ts`.
+  - `src/algorithms/content.test.ts` fails if a key is missing.
+- Spanish uses Rioplatense *voseo* ("elegí", "levantá") with correct accents.
+- Each algorithm cites **2–3 references you opened and verified**: Wikipedia, CLRS or Sedgewick, cp-algorithms, VisuAlgo. URLs are never made up.
+- Narrations explain the *why* of each step, not just the *what*: "7 > 3 → swap".
 
-## 🌿 Ramas, commits y PRs
+## 🌿 Branches, commits and PRs
 
-El detalle está en [`.claude/skills/contribute/SKILL.md`](.claude/skills/contribute/SKILL.md).
+The details are in [`.claude/skills/contribute/SKILL.md`](.claude/skills/contribute/SKILL.md).
 
-**Ramas y entornos:**
+**Branches and environments:**
 
-| Rama | Entorno |
+| Branch | Environment |
 |---|---|
-| `dev` | Integración y preview en https://josemiguez98.github.io/algo-quest/dev/ |
-| `main` | Producción en https://josemiguez98.github.io/algo-quest/ |
+| `dev` | Integration and preview at https://josemiguez98.github.io/algo-quest/dev/ |
+| `main` | Production at https://josemiguez98.github.io/algo-quest/ |
 
-**Tu rama:**
-- Sale de `dev` con un prefijo: `algo/<id>`, `theme/<id>`, `feat/…`, `fix/…`, `docs/…` o `chore/…`.
-- El PR va hacia `dev`.
+**Your branch:**
+- Starts from `dev` with a prefix: `algo/<id>`, `theme/<id>`, `feat/…`, `fix/…`, `docs/…` or `chore/…`.
+- The PR goes into `dev`.
 
 **Commits:**
-- Usan [Conventional Commits](https://www.conventionalcommits.org/) con un asunto corto, por ejemplo `feat(algo): add comb sort`.
-- Van sin trailers de atribución a herramientas de IA.
+- Use [Conventional Commits](https://www.conventionalcommits.org/) with a short subject, for example `feat(algo): add comb sort`.
+- Carry no AI tool attribution trailers.
 
-**Merge:** hacen falta el CI en verde y la **aprobación del maintainer (@JoseMiguez98)**, que es obligatoria en `dev` y en `main`. Si subís cambios nuevos al PR, hay que volver a aprobarlo. Después el PR se mergea con squash, y el maintainer promueve `dev` a `main`.
+**Merge:** it takes a green CI and the **maintainer's approval (@JoseMiguez98)**, which is required on both `dev` and `main`. If you push new changes to the PR, it has to be approved again. The PR is then squash-merged, and the maintainer promotes `dev` to `main`.
 
-### ✅ Checklist del PR
+### ✅ PR checklist
 
-- [ ] `npm run typecheck && npm test && npm run e2e && npm run build` pasan.
-- [ ] Sin dependencias en runtime nuevas y sin archivos de imagen o audio.
-- [ ] Si trabajaste con un agente: revisaste el resultado a mano y la skill quedó al día si hizo falta.
-- [ ] Si es un algoritmo: tests contra una referencia independiente, fila en `docs/fidelity.md`, contenido ES/EN y referencias verificadas.
-- [ ] Si es un theme: todos los `RequiredColor`, la CSS cubre todas las clases y la auditoría a11y pasa.
-- [ ] Captura o GIF si cambia algo visual.
-- [ ] Probado a mano en escritorio y mobile (~390 px).
+- [ ] `npm run typecheck && npm test && npm run e2e && npm run build` pass.
+- [ ] No new runtime dependencies and no image or audio files.
+- [ ] If you worked with an agent: you reviewed the result by hand and updated the skill if needed.
+- [ ] For an algorithm: tests against an independent reference, a row in `docs/fidelity.md`, ES/EN content and verified references.
+- [ ] For a theme: every `RequiredColor`, CSS covering every class, and a passing a11y audit.
+- [ ] A screenshot or GIF if something visual changes.
+- [ ] Tested by hand on desktop and mobile (~390 px).
 
-## ✍️ Estilo de código
+## ✍️ Code style
 
-- **TypeScript estricto** (`noUncheckedIndexedAccess`) y sin `any` salvo que esté justificado.
-- **Nombres claros antes que comentarios.** Comentá solo lo que alguien entendería mal sin el comentario (un invariante, un workaround), en una línea.
-- **Imitá el código de al lado:** mismo idioma, mismos helpers (`h()` para DOM, `ui.*` para componentes) y cero dependencias nuevas sin discutirlo antes.
-- **Accesibilidad:** todo control es un elemento DOM real con foco visible, las animaciones respetan `prefers-reduced-motion` y el canvas tiene `aria-label`.
+- **Strict TypeScript** (`noUncheckedIndexedAccess`) and no `any` unless justified.
+- **Clear names over comments.** Only comment what someone would get wrong without it (an invariant, a workaround), in one line.
+- **Match the code next to yours:** same idiom, same helpers (`h()` for DOM, `ui.*` for components) and zero new dependencies without discussing them first.
+- **Accessibility:** every control is a real DOM element with visible focus, animations respect `prefers-reduced-motion`, and the canvas has an `aria-label`.
 
-## 📄 Licencia
+## 📄 License
 
-Al contribuir aceptás que tu aporte se publique bajo la [licencia MIT](LICENSE) del proyecto.
+By contributing you agree that your contribution is published under the project's [MIT license](LICENSE).
