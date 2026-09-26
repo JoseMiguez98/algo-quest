@@ -38,6 +38,7 @@ The layout lives in `src/ui/layout.css`; don't touch it. Your CSS only skins the
 - **Transport:** `.transport*`, `.timeline*`, `.pad--dpad`, `.pad--face`.
 - **Compare:** `.fighter*`, `.versus__vs`, `.results`.
 - **Not found:** `.not-found`.
+- **Footer (every page):** `.site-footer`, `.site-footer__links`, `.site-footer__legal`.
 
 Use `grep -o "^\.[a-z][a-z0-9_-]*" src/themes/megadrive/style.css | sort -u` to diff your coverage against the reference theme. Use only the theme's `--color-*` / `--state-*` variables, never hard-coded colors from another theme. Respect `prefers-reduced-motion`.
 

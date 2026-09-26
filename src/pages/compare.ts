@@ -18,6 +18,7 @@ import { applyTheme, stageRenderer } from '../themes';
 import { createAppTools, onLanguageOrThemeChange } from '../ui/app-tools';
 import { ui } from '../ui/components';
 import { clear, h } from '../ui/dom';
+import { createSiteFooter } from '../ui/site-footer';
 import { icon } from '../ui/icons';
 import { createHelp } from '../ui/panels/help';
 import { createTransport } from '../ui/panels/transport';
@@ -107,7 +108,7 @@ async function mount(root: HTMLElement): Promise<void> {
   results.classList.add('results-window');
   const app = h('div', { class: 'compare' }, bar, setup, arena, transport.el, results);
   clear(root);
-  root.append(app, help.el);
+  root.append(app, createSiteFooter(), help.el);
 
   let fighters: Fighter[] = [];
 
