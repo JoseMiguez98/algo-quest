@@ -1,31 +1,31 @@
 name: Bug
-description: Algo no funciona o un algoritmo muestra un paso incorrecto.
+description: Something doesn't work or an algorithm shows a wrong step.
 labels: [bug]
 body:
   - type: input
     id: url
     attributes:
       label: URL
-      description: Página donde pasa. Si usaste el playground, copiá el enlace con el botón de compartir.
+      description: The page where it happens. If you used the playground, copy the link with the share button.
       placeholder: https://josemiguez98.github.io/algo-quest/sorting/quick-sort/?d=5,3,8
     validations:
       required: true
   - type: textarea
     id: what
     attributes:
-      label: Qué pasó y qué esperabas
-      description: Si es un error del algoritmo, indicá el número de paso y por qué es incorrecto (con una referencia si podés).
+      label: What happened and what you expected
+      description: If the algorithm is wrong, give the step number and why it's incorrect (with a reference if you can).
     validations:
       required: true
   - type: textarea
     id: steps
     attributes:
-      label: Cómo reproducirlo
+      label: How to reproduce it
       placeholder: |
-        1. Abrí …
-        2. Presioné …
+        1. Open …
+        2. Press …
   - type: input
     id: env
     attributes:
-      label: Navegador, sistema y theme
-      placeholder: Chrome 140, macOS, theme Mega Drive
+      label: Browser, OS and theme
+      placeholder: Chrome 140, macOS, Mega Drive theme
