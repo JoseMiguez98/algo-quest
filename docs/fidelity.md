@@ -1,5 +1,7 @@
 # Fidelidad algorítmica
 
+Los visualizers originales (HTML sueltos) están en el primer commit del repositorio (`git show 82b489d`).
+
 Cada visualizer reproduce una traza generada por un núcleo puro en `src/algorithms/**/algorithm.ts`.
 Los tests (`npm test`, Vitest + fast-check) comparan cada núcleo contra implementaciones de referencia
 independientes sobre miles de entradas aleatorias, además de los datasets curados de `src/data/legacy-graphs.ts`.
@@ -14,6 +16,7 @@ línea de pseudocódigo existente, los contadores nunca decrecen y ningún snaps
 | Bubble | Rango decreciente + salida temprana, `>` estricto | Knuth TAOCP 5.2.2 | resultado, estabilidad, comparaciones/swaps = referencia, swaps = inversiones, sufijo final tras cada pasada |
 | Selection | Mínimo con `<`, un swap por pasada, sin swap si `min = i` | Sedgewick 2.1 | n(n−1)/2 comparaciones, ≤ n−1 swaps, prefijo final, inestabilidad demostrable `[2,2,1]` |
 | Insertion | Desplazamientos (no swaps), `>` estricto | CLRS 2.1 | estabilidad, desplazamientos = inversiones, prefijo ordenado, un solo hueco mientras la clave está levantada |
+| Shell | Secuencia de Knuth 1, 4, 13…, inserción con saltos por desplazamiento | Sedgewick 2.1 | resultado, comparaciones = referencia, cada pasada deja el arreglo h-ordenado, inestabilidad demostrable |
 | Merge | Top-down, `mid = ⌊(lo+hi)/2⌋`, buffer auxiliar B, `≤` | CLRS 2.3 | estabilidad, comparaciones = referencia, `A[lo..hi]` ordenado tras cada merge, profundidad ⌈log₂ n⌉ |
 | Quick | Lomuto, pivote en `A[hi]` (opciones: first, median3, random), `≤` | CLRS 7.1 | soporta duplicados, invariante de partición, conteos = referencia, sin contar self-swaps, inestabilidad demostrable |
 | Heap | Max-heap 0-indexado, build bottom-up, sift-down iterativo | CLRS 6.4 | heap válido tras build y tras cada extracción, conteos = referencia, inestabilidad demostrable `[1,1]` |
