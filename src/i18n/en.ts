@@ -50,7 +50,6 @@ const en: Record<keyof typeof es, string> = {
   'edit.share': 'Copy link',
   'edit.copied': 'Link copied',
   'edit.tooMany': 'This algorithm supports up to {n} nodes.',
-  'edit.inconsistent': 'Some edges are shorter than the heuristic: A* may no longer find the optimum.',
   'edit.negative': 'There are negative weights: Dijkstra may report wrong distances.',
   'tool.move': 'Move',
   'tool.node': 'Node',

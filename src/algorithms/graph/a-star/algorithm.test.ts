@@ -19,6 +19,17 @@ describe('A*', () => {
     }), { numRuns: 400 });
   });
 
+  it('stays optimal on ANY positive-weight graph thanks to the scaled heuristic', () => {
+    fc.assert(fc.property(fc.oneof(randomGraph(), randomGraph({ directed: true }), randomGraph({ maxWeight: 2 })), fc.constantFrom('manhattan', 'euclidean') as fc.Arbitrary<'manhattan' | 'euclidean'>, (input, heuristic) => {
+      const steps = collect(run(input, { heuristic }));
+      checkContract(input, steps, pseudocode);
+      const best = refDijkstra(input.graph, input.start)[input.target!]!;
+      const path = steps.at(-1)!.state.path;
+      if (best === INF) expect(path).toBeNull();
+      else expect(cheapestPathCost(input.graph, path!)).toBe(best);
+    }), { numRuns: 500 });
+  });
+
   it('never expands more nodes than Dijkstra on metric graphs', () => {
     fc.assert(fc.property(randomGraph({ metric: true }), (input) => {
       const a = collect(run(input)).at(-1)!.counters.visited!;
