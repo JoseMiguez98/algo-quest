@@ -1,16 +1,19 @@
 import { sound } from '../core/sound';
 import { settings } from '../core/settings';
 import type { StageRenderer, Theme } from './contract';
-import { nesTheme } from './nes';
+import { megaDriveTheme } from './megadrive';
+import { rpgTheme } from './rpg';
 
-const themes: Record<string, Theme> = { [nesTheme.id]: nesTheme };
+const themes: Record<string, Theme> = { [megaDriveTheme.id]: megaDriveTheme, [rpgTheme.id]: rpgTheme };
+
+export const allThemes = (): Theme[] => Object.values(themes);
 
 export function registerTheme(theme: Theme): void {
   themes[theme.id] = theme;
 }
 
 export function currentTheme(): Theme {
-  return themes[settings.get().theme] ?? nesTheme;
+  return themes[settings.get().theme] ?? megaDriveTheme;
 }
 
 let renderer: StageRenderer | null = null;

@@ -23,13 +23,13 @@ export interface BarsLayer {
 export class BarsScene implements Scene<S> {
   readonly logicalHeight: number;
   readonly minWidth = 180;
-  readonly maxWidth = 420;
+  readonly maxWidth = 720;
 
   constructor(
     private readonly layers: BarsLayer[] = [],
     private readonly maxValue?: number,
   ) {
-    this.logicalHeight = 150 + layers.reduce((h, l) => h + l.height, 0);
+    this.logicalHeight = 160 + layers.reduce((h, l) => h + l.height, 0);
   }
 
   draw(r: StageRenderer, f: SceneFrame<S>): void {
@@ -44,18 +44,21 @@ export class BarsScene implements Scene<S> {
     const total = barW * n + gap * (n - 1);
     const left = Math.round((width - total) / 2);
     const top = 16;
-    const baseY = 118;
+    const baseY = 112;
+    const labelY = baseY + r.groundHeight + 3;
     const maxH = baseY - top;
     const layout: BarsLayout = { x: (i) => left + i * (barW + gap), barW, baseY, maxH, maxValue };
     const duplicates = duplicateIds(all);
+
+    r.ground(left - 6, baseY, total + 12);
 
     if (s.range) {
       const [lo, hi] = s.range;
       const x0 = layout.x(lo) - 1;
       const x1 = layout.x(hi) + barW;
-      r.rect(x0, baseY + 2, x1 - x0 + 1, 1, r.color('inactive'));
-      r.rect(x0, baseY + 1, 1, 3, r.color('inactive'));
-      r.rect(x1, baseY + 1, 1, 3, r.color('inactive'));
+      r.rect(x0, top - 6, x1 - x0 + 1, 1, r.color('inactive'));
+      r.rect(x0, top - 6, 1, 3, r.color('inactive'));
+      r.rect(x1, top - 6, 1, 3, r.color('inactive'));
     }
 
     const prevIndex = new Map<number, number>();
@@ -73,11 +76,11 @@ export class BarsScene implements Scene<S> {
       const state: VisualState = s.marks[i] ?? 'default';
       const lift = state === 'swap' && from !== undefined && from !== i ? Math.round(Math.sin(t * Math.PI) * 6) : 0;
       r.bar(px, baseY - h - lift, barW, h, state);
-      if (barW >= 11) r.text(String(it.value), px + barW / 2 + 1, baseY + 6, { align: 'center', tone: state === 'default' ? 'muted' : 'normal', color: state === 'default' ? undefined : r.color(state) });
+      if (barW >= 11) r.text(String(it.value), px + barW / 2 + 1, labelY, { align: 'center', tone: state === 'default' ? 'muted' : 'normal', color: state === 'default' ? undefined : r.color(state) });
       if (duplicates.has(it.id) && barW >= 7) r.text(String(duplicates.get(it.id)! + 1), px + barW / 2 + 1, baseY - h - lift - 9, { align: 'center', tone: 'muted' });
     });
 
-    for (const p of s.pointers) r.pointer(layout.x(p.index) + barW / 2, baseY + 16, p.label, { up: true, state: 'active' });
+    for (const p of s.pointers) r.pointer(layout.x(p.index) + barW / 2, labelY + 10, p.label, { up: true, state: 'active' });
 
     let y = this.logicalHeight - this.layers.reduce((h, l) => h + l.height, 0);
     for (const layer of this.layers) {

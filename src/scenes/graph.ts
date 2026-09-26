@@ -14,7 +14,7 @@ interface Placed {
 export class GraphScene implements Scene<S> {
   readonly logicalHeight = 160;
   readonly minWidth = 220;
-  readonly maxWidth = 400;
+  readonly maxWidth = 720;
 
   constructor(private readonly input: GraphInput) {}
 
