@@ -27,6 +27,8 @@ export interface PixelStyle {
  */
 export class PixelRenderer implements StageRenderer {
   readonly lineHeight = GLYPH_H + 3;
+  transform = { scale: 1, dx: 0, dy: 0 };
+
   get groundHeight(): number {
     return this.style.groundHeight ?? 1;
   }
@@ -76,7 +78,10 @@ export class PixelRenderer implements StageRenderer {
     const dh = Math.round(this.h * scale);
     t.fillStyle = this.c('stage');
     t.fillRect(0, 0, target.width, target.height);
-    t.drawImage(this.off, Math.floor((target.width - dw) / 2), Math.floor((target.height - dh) / 2), dw, dh);
+    const dx = Math.floor((target.width - dw) / 2);
+    const dy = Math.floor((target.height - dh) / 2);
+    this.transform = { scale, dx, dy };
+    t.drawImage(this.off, dx, dy, dw, dh);
   }
 
   rect(x: number, y: number, w: number, h: number, color: string): void {

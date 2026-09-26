@@ -12,7 +12,12 @@ import { applyTheme, stageRenderer } from '../themes';
 import { defaultOptions, initialInput, sceneFor, traceFor } from '../core/session';
 import { algorithmIdFromLocation, homeUrl } from '../core/routes';
 import { createAppTools, onLanguageOrThemeChange } from '../ui/app-tools';
-import { ui } from '../ui/components';
+import { setButtonIcon, ui } from '../ui/components';
+import { decodeState, encodeState } from '../playground/url-state';
+import type { Editor } from '../playground/editor';
+import { createArrayEditor } from '../playground/array-editor';
+import { createGraphEditor } from '../playground/graph-editor';
+import type { GraphInput } from '../algorithms/graph/types';
 import { clear, h } from '../ui/dom';
 import { icon } from '../ui/icons';
 import { createCodePanel } from '../ui/panels/code-panel';
@@ -38,8 +43,12 @@ async function mount(root: HTMLElement): Promise<void> {
 
   let seed: number | null = null;
   let fixture: string | undefined;
-  const options = defaultOptions(def);
-  let input = initialInput(def, seed);
+  const shared = decodeState(def, location.search);
+  const options = { ...defaultOptions(def), ...shared.options };
+  let custom: unknown | null = shared.input ?? null;
+  let input = custom ?? initialInput(def, seed);
+  let editing = false;
+  let editor: Editor | null = null;
   let steps: Step<unknown>[] = [];
   const player = new Player({ durations: def.durations, speed: settings.get().speed });
   const renderer = stageRenderer();
@@ -49,7 +58,7 @@ async function mount(root: HTMLElement): Promise<void> {
   const narration = h('p', { class: 'narration__text', 'aria-live': 'polite' });
   const narrationBox = h('div', { class: 'narration is-waiting' }, narration, h('span', { class: 'narration__caret', 'aria-hidden': 'true' }, '▼'));
   const code = createCodePanel(def.pseudocode);
-  const stats = createStatsPanel(def, structureViews(def.layers ?? [], input));
+  const stats = createStatsPanel(def, structureViews(def.layers ?? [], () => input));
   const transport = createTransport(player, () => steps);
   const help = createHelp();
 
@@ -62,7 +71,10 @@ async function mount(root: HTMLElement): Promise<void> {
   }
 
   const shuffleBtn = ui.button({ label: t('data.shuffle'), icon: 'shuffle', shortcut: 'N', onClick: () => shuffle() });
-  const presetBtn = ui.button({ label: t('data.preset'), variant: 'ghost', onClick: () => loadInput(null) });
+  const presetBtn = ui.button({ label: t('data.preset'), variant: 'ghost', onClick: () => { custom = null; loadInput(null); } });
+  const editBtn = ui.button({ label: t('edit.start'), icon: 'edit', shortcut: 'E', onClick: () => toggleEdit() });
+  const shareBtn = ui.button({ label: t('edit.share'), icon: 'link', iconOnly: true, onClick: () => share() });
+  const editPanel = h('div', { class: 'edit-panel', hidden: true });
   const pickers = h('div', { class: 'stage-toolbar__group' });
   for (const o of def.options ?? []) {
     const sel = h('select', { class: 'theme-select', 'aria-label': content.options?.[o.id] ?? o.id },
@@ -81,6 +93,7 @@ async function mount(root: HTMLElement): Promise<void> {
       ...ids.map((id, i) => h('option', { value: id }, i === 0 ? t('data.classic') : t(id.endsWith('negative-cycle') ? 'data.negativeCycle' : 'data.classic'))));
     sel.addEventListener('change', () => {
       fixture = sel.value;
+      custom = null;
       sound.unlock();
       sound.play('ui-select');
       loadInput(null);
@@ -89,9 +102,9 @@ async function mount(root: HTMLElement): Promise<void> {
   }
   const toolbar = h('div', { class: 'stage-toolbar' },
     stats.live,
-    h('div', { class: 'stage-toolbar__group' }, pickers, def.input.kind === 'array' ? shuffleBtn : null, def.input.kind === 'array' ? presetBtn : null),
+    h('div', { class: 'stage-toolbar__group' }, pickers, def.input.kind === 'array' ? shuffleBtn : null, def.input.kind === 'array' ? presetBtn : null, editBtn, shareBtn),
   );
-  const stageWindow = ui.window(null, toolbar, stageHost, stats.strip, narrationBox, legend);
+  const stageWindow = ui.window(null, toolbar, editPanel, stageHost, stats.strip, narrationBox, legend);
   stageWindow.classList.add('stage-window');
 
   const tabs: Record<Tab, { button: HTMLButtonElement; panel: HTMLElement }> = {
@@ -121,8 +134,9 @@ async function mount(root: HTMLElement): Promise<void> {
     tools.el,
   );
 
+  const app = h('div', { class: 'app' }, bar, stageWindow, transport.el, side);
   clear(root);
-  root.append(h('div', { class: 'app' }, bar, stageWindow, transport.el, side), help.el);
+  root.append(app, help.el);
   selectTab(settings.get().panel);
 
   function tabButton(id: Tab, label: string): HTMLButtonElement {
@@ -153,7 +167,8 @@ async function mount(root: HTMLElement): Promise<void> {
 
   function loadInput(nextSeed: number | null): void {
     seed = nextSeed;
-    input = initialInput(def!, seed, fixture);
+    input = custom ?? initialInput(def!, seed, fixture);
+    syncUrl();
     try {
       steps = traceFor(def!, input, options);
     } catch (e) {
@@ -166,10 +181,78 @@ async function mount(root: HTMLElement): Promise<void> {
   }
 
   function shuffle(): void {
-    if (def!.input.kind !== 'array') return;
+    if (def!.input.kind !== 'array' || editing) return;
     sound.unlock();
     sound.play('ui-select');
+    custom = null;
     loadInput((Date.now() ^ (Math.random() * 1e9)) >>> 0);
+  }
+
+  function syncUrl(): void {
+    const q = new URLSearchParams(location.search);
+    ['d', 'g', 'o'].forEach((k) => q.delete(k));
+    const state = new URLSearchParams(encodeState(def!, input, options));
+    if (!custom) { state.delete('d'); state.delete('g'); }
+    state.forEach((v, k) => q.set(k, v));
+    const qs = q.toString();
+    history.replaceState(null, '', `${location.pathname}${qs ? `?${qs}` : ''}`);
+  }
+
+  function share(): void {
+    sound.unlock();
+    custom ??= input;
+    syncUrl();
+    void navigator.clipboard?.writeText(location.href).then(() => {
+      sound.play('ui-select');
+      narration.textContent = t('edit.copied');
+    });
+  }
+
+  function preview(): void {
+    if (!editor) return;
+    const value = editor.value();
+    input = value;
+    stage.setScene(sceneFor(def!, value), false);
+    try {
+      const first = def!.run(value as never, options)[Symbol.iterator]().next().value as Step<unknown> | undefined;
+      if (first) stage.render(editor.decorate(first), undefined, 1);
+      narration.textContent = t('edit.title');
+    } catch (e) {
+      narration.textContent = t('error.input', { msg: (e as Error).message });
+    }
+  }
+
+  function toggleEdit(): void {
+    sound.unlock();
+    if (!editing) {
+      player.pause();
+      editing = true;
+      const host = { changed: preview, rebuilt: preview };
+      editor = def!.input.kind === 'array'
+        ? createArrayEditor(def!.input, input as number[], host)
+        : createGraphEditor(def!, input as GraphInput, () => options, host);
+      editPanel.replaceChildren(editor.tools);
+      editPanel.hidden = false;
+      app.classList.add('is-editing');
+      transport.el.inert = true;
+      setButtonIcon(editBtn, 'play', t('edit.done'));
+      editBtn.classList.add('ui-button--primary');
+      editor.attach(stage);
+      sound.play('ui-select');
+      preview();
+      return;
+    }
+    editing = false;
+    custom = editor!.value();
+    editor!.detach();
+    editor = null;
+    editPanel.hidden = true;
+    app.classList.remove('is-editing');
+    transport.el.inert = false;
+    setButtonIcon(editBtn, 'edit', t('edit.start'));
+    editBtn.classList.remove('ui-button--primary');
+    sound.play('ui-back');
+    loadInput(seed);
   }
 
   player.on('step', ({ direction }) => onStep(direction));
@@ -183,21 +266,23 @@ async function mount(root: HTMLElement): Promise<void> {
     transport.update();
   });
 
+  const idle = (fn: () => void) => () => { if (!editing) fn(); };
   const unbind = bindHotkeys({
-    toggle: () => player.toggle(),
-    forward: () => player.stepForward(),
-    back: () => player.stepBack(),
-    start: () => player.seek(0),
-    end: () => player.seek(player.length - 1),
-    reset: () => player.reset(),
+    toggle: idle(() => player.toggle()),
+    forward: idle(() => player.stepForward()),
+    back: idle(() => player.stepBack()),
+    start: idle(() => player.seek(0)),
+    end: idle(() => player.seek(player.length - 1)),
+    reset: idle(() => player.reset()),
     shuffle,
-    faster: () => player.faster(),
-    slower: () => player.slower(),
+    faster: idle(() => player.faster()),
+    slower: idle(() => player.slower()),
+    edit: () => toggleEdit(),
     mute: tools.toggleMute,
     code: () => selectTab('code'),
     info: () => selectTab('info'),
     help: () => help.toggle(),
-    close: () => help.close(),
+    close: () => (help.isOpen ? help.close() : editing ? toggleEdit() : undefined),
   });
   const unlock = () => sound.unlock();
   window.addEventListener('pointerdown', unlock, { once: true });

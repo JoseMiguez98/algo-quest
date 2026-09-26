@@ -60,6 +60,8 @@ export interface StageRenderer {
   begin(width: number, height: number): void;
   /** Copies the frame to the visible canvas. */
   present(target: HTMLCanvasElement): void;
+  /** Where the last frame landed on the target canvas, in device pixels. */
+  readonly transform: { scale: number; dx: number; dy: number };
   color(state: VisualState): string;
   rect(x: number, y: number, w: number, h: number, color: string): void;
   line(x1: number, y1: number, x2: number, y2: number, color: string, dashed?: boolean): void;

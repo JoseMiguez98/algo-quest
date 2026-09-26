@@ -7,7 +7,7 @@ export default defineAlgorithm<GraphInput>({
   category: 'graph',
   scene: 'graph',
   layers: ['matrix'],
-  input: { kind: 'graph', fixture: 'floyd-warshall', alternatives: ['floyd-warshall-negative-cycle'], needsTarget: true, weighted: true, directed: true, negativeWeights: true },
+  input: { kind: 'graph', fixture: 'floyd-warshall', alternatives: ['floyd-warshall-negative-cycle'], needsTarget: true, weighted: true, directed: true, negativeWeights: true, maxNodes: 12 },
   run: (input) => run(input),
   pseudocode,
   complexity: { best: 'O(V³)', average: 'O(V³)', worst: 'O(V³)', space: 'O(V²)' },

@@ -26,9 +26,9 @@ export class Stage<S = unknown> {
     this.redraw();
   }
 
-  setScene(scene: Scene<S>): void {
+  setScene(scene: Scene<S>, redraw = true): void {
     this.scene = scene;
-    this.redraw();
+    if (redraw) this.redraw();
   }
 
   get logicalSize(): { width: number; height: number } {
@@ -44,6 +44,18 @@ export class Stage<S = unknown> {
     this.renderer.begin(width, height);
     this.scene.draw(this.renderer, { step, prev, t: ease(t), width, height });
     this.renderer.present(this.canvas);
+  }
+
+  /** Converts a pointer position to logical stage pixels. */
+  toLogical(clientX: number, clientY: number): { x: number; y: number } {
+    const rect = this.canvas.getBoundingClientRect();
+    const dpr = this.canvas.width / Math.max(1, rect.width);
+    const { scale, dx, dy } = this.renderer.transform;
+    return { x: ((clientX - rect.left) * dpr - dx) / scale, y: ((clientY - rect.top) * dpr - dy) / scale };
+  }
+
+  get currentScene(): Scene<S> {
+    return this.scene;
   }
 
   redraw(): void {

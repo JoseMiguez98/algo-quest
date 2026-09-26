@@ -41,6 +41,22 @@ export class BarsScene implements Scene<S> {
     this.logicalHeight = 160 + layers.reduce((h, l) => h + l.height, 0) + (layers.some((l) => l.height) ? 4 : 0);
   }
 
+  /** Layout of the last drawn frame, for hit-testing in the editor. */
+  layout: (BarsLayout & { n: number }) | null = null;
+
+  indexAt(x: number): number | null {
+    const l = this.layout;
+    if (!l) return null;
+    for (let i = 0; i < l.n; i++) if (x >= l.x(i) - 1 && x <= l.x(i) + l.barW + 1) return i;
+    return null;
+  }
+
+  valueAt(y: number): number | null {
+    const l = this.layout;
+    if (!l) return null;
+    return Math.round(((l.baseY - y) / l.maxH) * l.maxValue);
+  }
+
   draw(r: StageRenderer, f: SceneFrame<S>): void {
     const { step, prev, t, width } = f;
     const s = step.state;
@@ -59,6 +75,7 @@ export class BarsScene implements Scene<S> {
     const maxH = baseY - top;
     const layout: BarsLayout = { x: (i) => left + i * (barW + gap), barW, baseY, maxH, maxValue };
     const duplicates = duplicateIds(all);
+    this.layout = { ...layout, n };
 
     r.ground(left - 6, baseY, total + 12);
 

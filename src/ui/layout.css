@@ -124,3 +124,17 @@ img, svg, canvas { display: block; }
   .hero { grid-template-columns: minmax(0, 1fr); min-height: 0; }
   .demo { order: -1; }
 }
+.edit-panel { display: flex; }
+.edit-tools { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-2) var(--space-3); width: 100%; }
+.tool-row { display: flex; flex-wrap: wrap; gap: 4px; }
+.picker__row { display: inline-flex; align-items: center; gap: 8px; }
+.picker--grow { flex: 1 1 240px; }
+.values-input { width: 100%; }
+.weight-input { width: 6em; }
+.edit-hint, .edit-error { margin: 0; flex-basis: 100%; }
+.edit-warnings { display: flex; flex-wrap: wrap; gap: 4px; flex-basis: 100%; }
+.edit-warnings:empty { display: none; }
+.stage-canvas.is-editable { cursor: crosshair; touch-action: none; }
+.is-editing .transport { opacity: .45; }
+.picker .search { flex: none; }
+.picker--grow .search { width: 100%; }
