@@ -11,18 +11,20 @@ export interface Settings {
   speed: Speed;
   panel: 'code' | 'info' | 'stats';
   scanlines: boolean;
+  music: boolean;
 }
 
 const KEY = 'algo-visualizer:settings';
 
 const defaults = (): Settings => ({
   lang: typeof navigator !== 'undefined' && navigator.language?.toLowerCase().startsWith('es') ? 'es' : 'en',
-  theme: 'nes',
+  theme: 'megadrive',
   volume: 0.6,
   muted: false,
   speed: 1,
   panel: 'code',
   scanlines: true,
+  music: false,
 });
 
 function load(): Settings {

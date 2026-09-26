@@ -8,7 +8,7 @@ export function createLegend(def: AlgorithmDef<never>, c: AlgorithmContent, r: S
   for (const state of def.legend) {
     const key = `legend.${state}`;
     const label = c.legend?.[state] ?? (has(key) ? t(key) : state);
-    const swatch = state === 'default' && def.category === 'graph' ? 'background:var(--color-window);box-shadow:0 0 0 2px var(--color-muted)' : `background:${r.color(state)}`;
+    const swatch = state === 'default' && def.category === 'graph' ? 'background:var(--color-node);box-shadow:0 0 0 2px var(--color-node-border)' : `background:${r.color(state)}`;
     list.append(h('li', {}, h('span', { class: 'legend__swatch', style: swatch }), label));
   }
   return list;

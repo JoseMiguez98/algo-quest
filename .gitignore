@@ -1,8 +1,8 @@
-node_modules/
-dist/
-coverage/
-test-results/
-playwright-report/
 .DS_Store
-*.local
 .shot*.mjs
+*.local
+coverage/
+dist/
+node_modules/
+playwright-report/
+test-results/

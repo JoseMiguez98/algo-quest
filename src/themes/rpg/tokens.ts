@@ -1,7 +1,7 @@
 import type { ThemeTokens } from '../contract';
 
 /** Colors picked from the NES 2C02 PPU palette (hex index in comments). */
-export const nesTokens: ThemeTokens = {
+export const rpgTokens: ThemeTokens = {
   color: {
     bg: '#000000', // $0F
     window: '#0000BC', // $02 — classic RPG menu window
@@ -16,6 +16,9 @@ export const nesTokens: ThemeTokens = {
     danger: '#F83800', // $16
     brick: '#E45C10', // $17
     stage: '#000000',
+    node: '#0000BC',
+    'node-border': '#BCBCBC',
+    cell: '#00008C',
     'on-accent': '#000000',
   },
   state: {

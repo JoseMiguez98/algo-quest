@@ -28,11 +28,14 @@ export type VisualState =
   | 'relaxed'
   | 'cycle';
 
+/** Color keys every theme must define because shared renderers and components rely on them. */
+export type RequiredColor = 'bg' | 'text' | 'muted' | 'dim' | 'accent' | 'info' | 'success' | 'danger' | 'border' | 'stage' | 'node' | 'node-border' | 'cell' | 'brick' | 'on-accent';
+
 export type TextTone = 'normal' | 'muted' | 'accent' | 'inverse';
 
 export interface ThemeTokens {
   /** Every value becomes a CSS custom property: --color-<key>. */
-  color: Record<string, string>;
+  color: Record<RequiredColor, string> & Record<string, string>;
   state: Record<VisualState, string>;
   font: { display: string; body: string };
   fontUrls: string[];
@@ -51,6 +54,8 @@ export interface TextOptions {
  */
 export interface StageRenderer {
   readonly lineHeight: number;
+  /** Height of the ground strip drawn by ground(). */
+  readonly groundHeight: number;
   /** Clears and prepares a frame of the given logical size. */
   begin(width: number, height: number): void;
   /** Copies the frame to the visible canvas. */
@@ -60,6 +65,8 @@ export interface StageRenderer {
   line(x1: number, y1: number, x2: number, y2: number, color: string, dashed?: boolean): void;
   text(s: string, x: number, y: number, o?: TextOptions): void;
   measure(s: string, scale?: number): number;
+  /** Floor strip under bars, starting at y and spanning w. */
+  ground(x: number, y: number, w: number): void;
   bar(x: number, y: number, w: number, h: number, state: VisualState, o?: { ghost?: boolean }): void;
   slot(x: number, y: number, w: number, h: number, o?: { active?: boolean }): void;
   node(cx: number, cy: number, r: number, state: VisualState, label: string, o?: { ring?: 'start' | 'target' | null }): void;

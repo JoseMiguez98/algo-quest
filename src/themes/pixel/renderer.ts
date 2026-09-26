@@ -1,31 +1,47 @@
 import type { StageRenderer, TextOptions, ThemeTokens, VisualState } from '../contract';
-import { ADVANCE, GLYPH_H, GLYPH_W, glyph, textWidth } from './bitmap-font';
+import { ADVANCE, GLYPH_H, GLYPH_W, glyph, textWidth } from "./bitmap-font";
 
 const hex = (c: string): [number, number, number] => {
   const n = parseInt(c.slice(1), 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 };
 
-const mix = (c: string, to: string, t: number): string => {
+export const mix = (c: string, to: string, t: number): string => {
   const [a, b] = [hex(c), hex(to)];
   return `rgb(${a.map((v, i) => Math.round(v + (b[i]! - v) * t)).join(',')})`;
 };
+
+export interface PixelStyle {
+  /** Black sprite outline around bars, nodes and cells (16-bit look); null draws none. */
+  outline?: string | null;
+  /** Paints the stage background; defaults to a flat stage color. */
+  backdrop?: (r: PixelRenderer, width: number, height: number) => void;
+  /** Look of the floor bars stand on. */
+  ground?: (r: PixelRenderer, x: number, y: number, w: number) => void;
+  groundHeight?: number;
+}
 
 /**
  * Draws into a low-resolution offscreen canvas and presents it with nearest-neighbour
  * integer scaling, so every logical pixel is a crisp square.
  */
-export class NesRenderer implements StageRenderer {
+export class PixelRenderer implements StageRenderer {
   readonly lineHeight = GLYPH_H + 3;
+  get groundHeight(): number {
+    return this.style.groundHeight ?? 1;
+  }
   private readonly off = document.createElement('canvas');
   private readonly g = this.off.getContext('2d')!;
   private readonly glyphs = new Map<string, HTMLCanvasElement>();
   private w = 0;
   private h = 0;
 
-  constructor(private readonly tokens: ThemeTokens) {}
+  constructor(
+    private readonly tokens: ThemeTokens,
+    private readonly style: PixelStyle = {},
+  ) {}
 
-  private c(key: string): string {
+  c(key: string): string {
     return this.tokens.color[key] ?? '#FF00FF';
   }
 
@@ -41,7 +57,13 @@ export class NesRenderer implements StageRenderer {
     this.w = width;
     this.h = height;
     this.g.imageSmoothingEnabled = false;
-    this.rect(0, 0, width, height, this.c('stage'));
+    if (this.style.backdrop) this.style.backdrop(this, width, height);
+    else this.rect(0, 0, width, height, this.c('stage'));
+  }
+
+  ground(x: number, y: number, w: number): void {
+    if (this.style.ground) this.style.ground(this, Math.round(x), Math.round(y), Math.round(w));
+    else this.rect(x, y, w, 1, this.c('dim'));
   }
 
   present(target: HTMLCanvasElement): void {
@@ -61,7 +83,7 @@ export class NesRenderer implements StageRenderer {
     this.g.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
   }
 
-  private px(x: number, y: number): void {
+  px(x: number, y: number): void {
     this.g.fillRect(x, y, 1, 1);
   }
 
@@ -125,6 +147,9 @@ export class NesRenderer implements StageRenderer {
       this.frame(x, y, w, h, mix(base, '#000000', 0.45), true);
       return;
     }
+    if (this.style.outline && w >= 4) {
+      this.rect(x - 1, y - 1, w + 2, h + 1, this.style.outline);
+    }
     this.rect(x, y, w, h, base);
     if (w >= 3 && h >= 2) {
       this.rect(x, y, w, 1, mix(base, '#FFFFFF', 0.45));
@@ -155,9 +180,9 @@ export class NesRenderer implements StageRenderer {
   node(cx: number, cy: number, r: number, state: VisualState, label: string, o: { ring?: 'start' | 'target' | null } = {}): void {
     [cx, cy, r] = [Math.round(cx), Math.round(cy), Math.round(r)];
     if (o.ring) this.disc(cx, cy, r + 2, o.ring === 'start' ? this.c('border') : this.c('accent'));
-    this.disc(cx, cy, r + 1, this.c('bg'));
-    const fill = state === 'default' ? this.c('window') : this.color(state);
-    this.disc(cx, cy, r, state === 'default' ? this.c('muted') : mix(fill, '#000000', 0.3));
+    this.disc(cx, cy, r + 1, this.style.outline ?? this.c('bg'));
+    const fill = state === 'default' ? this.c('node') : this.color(state);
+    this.disc(cx, cy, r, state === 'default' ? this.c('node-border') : mix(fill, '#000000', 0.3));
     this.disc(cx, cy, r - 1, fill);
     this.g.fillStyle = mix(fill, '#FFFFFF', 0.5);
     this.g.fillRect(cx - Math.floor(r / 2), cy - r + 1, 2, 1);
@@ -207,7 +232,7 @@ export class NesRenderer implements StageRenderer {
       return;
     }
     if (state === 'open' || state === 'default') {
-      this.rect(x, y, size, size, this.c('window-deep'));
+      this.rect(x, y, size, size, this.c('cell'));
       this.rect(x + size - 1, y, 1, size, this.c('bg'));
       this.rect(x, y + size - 1, size, 1, this.c('bg'));
     } else {

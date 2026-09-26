@@ -33,7 +33,7 @@ export function createStatsPanel(def: AlgorithmDef<never>, structures: Structure
 
   const update = (step: Step<unknown>) => {
     for (const [c, dd] of values) dd.textContent = String(step.counters[c] ?? 0);
-    for (const [c, dd] of liveValues) dd.textContent = String(step.counters[c] ?? 0);
+    for (const [c, dd] of liveValues) dd.textContent = String(step.counters[c] ?? 0).padStart(3, '0');
     for (const { view, list } of lists) {
       clear(list);
       const items = view.items(step);
