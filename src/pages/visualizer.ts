@@ -1,6 +1,7 @@
 import '../ui/layout.css';
 import { byId, algorithms } from '../algorithms/registry';
 import { interpolate, type AlgorithmContent } from '../core/algorithm';
+import { track, trackPage } from '../core/analytics';
 import { bindHotkeys } from '../core/hotkeys';
 import { Player } from '../core/player';
 import { settings } from '../core/settings';
@@ -40,6 +41,8 @@ async function mount(root: HTMLElement): Promise<void> {
   const content: AlgorithmContent = (await def.content[settings.get().lang]()).default;
   document.title = `${content.name} · ${t('app.name')}`;
   document.documentElement.lang = settings.get().lang;
+  trackPage(`/${def.category}/${def.id}/`);
+  const ev = (name: string) => track(`algo/${def.id}/${name}`);
 
   let seed: number | null = null;
   let fixture: string | undefined;
@@ -60,7 +63,7 @@ async function mount(root: HTMLElement): Promise<void> {
   const narrationBox = h('div', { class: 'narration is-waiting' }, narration, h('span', { class: 'narration__caret', 'aria-hidden': 'true' }, '▼'));
   const code = createCodePanel(def.pseudocode);
   const stats = createStatsPanel(def, structureViews(def.layers ?? [], () => input));
-  const transport = createTransport(player, () => steps);
+  const transport = createTransport(player, () => steps, ev);
   const help = createHelp();
 
   const legend = createLegend(def, content, renderer);
@@ -122,7 +125,7 @@ async function mount(root: HTMLElement): Promise<void> {
     }
     settings.set({ panel: tab });
   };
-  for (const [k, v] of Object.entries(tabs) as [Tab, (typeof tabs)[Tab]][]) v.button.addEventListener('click', () => selectTab(k));
+  for (const [k, v] of Object.entries(tabs) as [Tab, (typeof tabs)[Tab]][]) v.button.addEventListener('click', () => { selectTab(k); track(`panel/${k}`); });
   const side = ui.window(null,
     h('div', { class: 'tabs', role: 'tablist' }, tabs.code.button, tabs.info.button, tabs.stats.button),
     h('div', { class: 'tab-panels' }, tabs.code.panel, tabs.info.panel, tabs.stats.panel),
@@ -204,6 +207,7 @@ async function mount(root: HTMLElement): Promise<void> {
     sound.unlock();
     custom ??= input;
     syncUrl();
+    ev('share');
     void navigator.clipboard?.writeText(location.href).then(() => {
       sound.play('ui-select');
       narration.textContent = t('edit.copied');
@@ -240,6 +244,7 @@ async function mount(root: HTMLElement): Promise<void> {
       setButtonIcon(editBtn, 'play', t('edit.done'));
       editBtn.classList.add('ui-button--primary');
       editor.attach(stage);
+      ev('edit');
       sound.play('ui-select');
       preview();
       return;
@@ -260,6 +265,8 @@ async function mount(root: HTMLElement): Promise<void> {
   player.on('step', ({ direction }) => onStep(direction));
   player.on('frame', () => render());
   player.on('status', (s) => {
+    if (s === 'playing') ev('play');
+    if (s === 'ended') ev('complete');
     narrationBox.classList.toggle('is-waiting', s !== 'playing');
     transport.update();
   });
@@ -272,17 +279,17 @@ async function mount(root: HTMLElement): Promise<void> {
   const unbind = bindHotkeys({
     toggle: idle(() => player.toggle()),
     forward: idle(() => player.stepForward()),
-    back: idle(() => player.stepBack()),
-    start: idle(() => player.seek(0)),
-    end: idle(() => player.seek(player.length - 1)),
+    back: idle(() => { player.stepBack(); ev('step-back'); }),
+    start: idle(() => { player.seek(0); ev('seek'); }),
+    end: idle(() => { player.seek(player.length - 1); ev('seek'); }),
     reset: idle(() => player.reset()),
     shuffle,
     faster: idle(() => player.faster()),
     slower: idle(() => player.slower()),
     edit: () => toggleEdit(),
     mute: tools.toggleMute,
-    code: () => selectTab('code'),
-    info: () => selectTab('info'),
+    code: () => { selectTab('code'); track('panel/code'); },
+    info: () => { selectTab('info'); track('panel/info'); },
     help: () => help.toggle(),
     close: () => (help.isOpen ? help.close() : editing ? toggleEdit() : undefined),
   });

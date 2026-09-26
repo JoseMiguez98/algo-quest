@@ -18,6 +18,7 @@ img, svg, canvas { display: block; }
 .app-bar { grid-area: bar; display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
 .app-bar__title { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .app-bar__tools { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.env-badge { padding: 2px var(--space-2); background: var(--color-accent); color: var(--color-on-accent); font-family: var(--font-display); font-size: 0.7rem; letter-spacing: 0.1em; }
 
 .stage-window { grid-area: stage; display: flex; flex-direction: column; min-height: 0; }
 .stage-toolbar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); flex-wrap: wrap; }
@@ -121,6 +122,9 @@ img, svg, canvas { display: block; }
 .empty p { margin: 0; }
 .home-footer { display: flex; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2); }
 .home-footer p { margin: 0; }
+.not-found { min-height: 100vh; display: grid; place-items: center; padding: var(--space-3); }
+.not-found .ui-window { max-width: 52ch; display: flex; flex-direction: column; gap: var(--space-3); align-items: flex-start; }
+.not-found p { margin: 0; overflow-wrap: anywhere; }
 @media (max-width: 860px) {
   .hero { grid-template-columns: minmax(0, 1fr); min-height: 0; }
   .demo { order: -1; }

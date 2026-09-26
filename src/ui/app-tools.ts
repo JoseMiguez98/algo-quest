@@ -1,3 +1,4 @@
+import { isDevEnvironment, track } from '../core/analytics';
 import { settings } from '../core/settings';
 import { sound } from '../core/sound';
 import { t } from '../i18n';
@@ -14,11 +15,12 @@ export function createAppTools(extra: HTMLElement[] = []) {
   volume.addEventListener('input', () => settings.set({ volume: Number(volume.value), muted: false }));
   const themeSelect = h('select', { class: 'theme-select', 'aria-label': t('theme.label') },
     ...allThemes().map((th) => h('option', { value: th.id, selected: th.id === settings.get().theme }, th.name)));
-  themeSelect.addEventListener('change', () => settings.set({ theme: themeSelect.value }));
+  themeSelect.addEventListener('change', () => { track(`theme/${themeSelect.value}`); settings.set({ theme: themeSelect.value }); });
   const langBtns = (['es', 'en'] as const).map((l) =>
-    ui.button({ label: l.toUpperCase(), variant: settings.get().lang === l ? 'default' : 'ghost', pressed: settings.get().lang === l, onClick: () => settings.get().lang !== l && settings.set({ lang: l }) }));
+    ui.button({ label: l.toUpperCase(), variant: settings.get().lang === l ? 'default' : 'ghost', pressed: settings.get().lang === l, onClick: () => { if (settings.get().lang === l) return; track(`lang/${l}`); settings.set({ lang: l }); } }));
 
   const el = h('div', { class: 'app-bar__tools' },
+    isDevEnvironment ? h('span', { class: 'env-badge', title: t('env.dev') }, 'DEV') : null,
     h('div', { class: 'lang-switch', role: 'group', 'aria-label': t('lang.label') }, ...langBtns),
     themeSelect,
     h('div', { class: 'volume' }, soundBtn, musicBtn, volume),
@@ -28,6 +30,7 @@ export function createAppTools(extra: HTMLElement[] = []) {
   function toggleMute(): void {
     sound.unlock();
     settings.set({ muted: !settings.get().muted });
+    if (settings.get().muted) track('sound/off');
     sound.play('ui-toggle');
   }
 
