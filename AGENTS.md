@@ -6,7 +6,7 @@ Algo Quest is a visualizer and playground for computer science algorithms, and i
 |---|---|
 | Add an algorithm or a category | `.claude/skills/add-algorithm/SKILL.md` |
 | Create a theme | `.claude/skills/add-theme/SKILL.md` |
-| Branch, commit, open a PR, release | `.claude/skills/contribute/SKILL.md` |
+| Branch, commit, open a PR, release | `.claude/skills/gitflow/SKILL.md` |
 
 ## Non-negotiable rules
 

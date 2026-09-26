@@ -1,12 +1,22 @@
 ---
-name: contribute
-description: Algo Quest git workflow — branch naming, commits, PR checklist, the dev/main environments, releases and hotfixes. Use whenever creating a branch, committing, opening a PR, releasing dev to main or fixing production.
+name: gitflow
+description: Algo Quest Gitflow — feature branches off dev, the dev/main environments, commits, PR checklist, releases and hotfixes. Use whenever creating a branch, committing, opening a PR, releasing dev to main or fixing production.
 allowed-tools: Read, Bash(git status*), Bash(git diff*), Bash(git log*), Bash(git branch*), Bash(git switch*), Bash(git checkout*), Bash(git add*), Bash(git commit*), Bash(git fetch*), Bash(git rebase*), Bash(npm test*), Bash(npm run *), Bash(gh pr view*), Bash(gh pr checks*), Bash(gh run *)
 ---
 
-# Contribution workflow
+# Gitflow
 
 Algo Quest is built to be extended with AI agents. The project rules live in `AGENTS.md`, and the task workflows are the skills in `.claude/skills/`. Follow them so every contribution meets the same bar.
+
+The repo follows a lightweight Gitflow:
+
+| Gitflow role | Here |
+|---|---|
+| Develop | `dev`, the default branch |
+| Production | `main` |
+| Feature branches | `algo/…`, `theme/…`, `feat/…`, `fix/…`, `docs/…`, `chore/…` off `dev`, squash-merged back into `dev` |
+| Release | a PR from `dev` into `main`, merged with a merge commit |
+| Hotfix | `fix/…` off `main`, then `main` merged back into `dev` |
 
 ## Environments
 
