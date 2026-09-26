@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Selection Sort - 16-bit Visualizer</title>
+<style>
+html,body{margin:0;height:100%;background:#0b0d1f;overflow:hidden;color:#f4f4f8;font-family:"Courier New",Courier,monospace}
+#stage{position:fixed;left:0;right:0;top:0;bottom:56px;display:flex;align-items:center;justify-content:center}
+#screen{display:block;image-rendering:pixelated;image-rendering:crisp-edges;image-rendering:pixelated}
+#bar{position:fixed;left:0;right:0;bottom:0;box-sizing:border-box;padding:8px 10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;background:#171a3a;border-top:4px solid #4a54a8}
+button{font:bold 14px "Courier New",Courier,monospace;letter-spacing:1px;color:#f4f4f8;background:#262b5e;border:3px solid;border-color:#6b7096 #1f3f9a #1f3f9a #6b7096;padding:6px 12px;cursor:pointer;text-transform:uppercase;border-radius:0}
+button:hover:not(:disabled){background:#3a78e8}
+button:active:not(:disabled){border-color:#1f3f9a #6b7096 #6b7096 #1f3f9a}
+button:disabled{opacity:.4;cursor:default}
+button:focus-visible,input:focus-visible{outline:2px solid #f8d838;outline-offset:2px}
+label{font-size:13px;letter-spacing:1px;display:flex;align-items:center;gap:6px;color:#b0b4cc}
+input[type=range]{width:90px;accent-color:#f8d838}
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="screen" role="img" aria-label="Selection sort visualizer"></canvas></div>
+<div id="bar">
+  <button id="bStart">START</button>
+  <button id="bPause">PAUSE</button>
+  <button id="bStep">STEP</button>
+  <button id="bReset">RESET</button>
+  <button id="bShuffle">SHUFFLE</button>
+  <button id="bSound">SOUND ON</button>
+  <label>VOL <input id="vol" type="range" min="0" max="100" value="50"></label>
+</div>
+<script>
+(() => {
+'use strict';
+
+/* ================================================================
+   CONSTANTS, PALETTE, PIXEL FONT
+   ================================================================ */
+const W = 128, H = 96;
+const X0 = 2, SLOT = 9, BW = 7, BASE = 45, SC = 2;      // array layout
+const STEP_MS = 1000 / 60;
+const PRESET = [5, 2, 9, 1, 3, 4, 8, 7, 6];
+
+// ~24-colour NES/16-bit style palette
+const PAL = [
+  '#0b0d1f', '#171a3a', '#262b5e', '#4a54a8', '#f4f4f8', '#b0b4cc', '#6b7096', '#383c66',
+  '#e8404a', '#9a1f3a', '#f08a2c', '#f8d838', '#b08a18', '#7ad838', '#2ea84a', '#17683a',
+  '#38d8e8', '#3a78e8', '#1f3f9a', '#8a4ae8', '#e848b0', '#f8a0c8', '#7a4a2a', '#d8b078', '#4a2a8a'
+];
+// colour index shortcuts
+const C_BG = 0, C_PANEL = 1, C_BORDER = 3, C_WHITE = 4, C_LGREY = 5, C_GREY = 6, C_DGREY = 7,
+      C_RED = 8, C_ORANGE = 10, C_YELLOW = 11, C_LIME = 13, C_GREEN = 14, C_CYAN = 16,
+      C_PINK = 21;
+
+// bar styles: [fill, highlight, shade, number colour]
+const ST_UNS   = [17, 16, 18, 4];
+const ST_SORT  = [14, 13, 15, 13];
+const ST_MIN   = [11, 4, 12, 11];
+const ST_CMP   = [8, 21, 9, 21];
+const ST_TGT   = [19, 21, 24, 21];
+const ST_FLASH = [4, 4, 5, 4];
+const ST_FINAL = [14, 11, 15, 11];
+
+// 3x5 pixel font, 3-bit rows
+const F = {
+  A:[2,5,7,5,5],B:[6,5,6,5,6],C:[3,4,4,4,3],D:[6,5,5,5,6],E:[7,4,6,4,7],F:[7,4,6,4,4],G:[3,4,5,5,3],
+  H:[5,5,7,5,5],I:[7,2,2,2,7],J:[1,1,1,5,2],K:[5,5,6,5,5],L:[4,4,4,4,7],M:[5,7,7,5,5],N:[6,5,5,5,5],
+  O:[2,5,5,5,2],P:[6,5,6,4,4],Q:[2,5,5,6,3],R:[6,5,6,5,5],S:[3,4,2,1,6],T:[7,2,2,2,2],U:[5,5,5,5,7],
+  V:[5,5,5,5,2],W:[5,5,7,7,5],X:[5,5,2,5,5],Y:[5,5,2,2,2],Z:[7,1,2,4,7],
+  '0':[7,5,5,5,7],'1':[2,6,2,2,7],'2':[6,1,2,4,7],'3':[6,1,2,1,6],'4':[5,5,7,1,1],'5':[7,4,6,1,6],
+  '6':[3,4,7,5,7],'7':[7,1,2,2,2],'8':[7,5,7,5,7],'9':[7,5,7,1,6],
+  '<':[1,2,4,2,1],'>':[4,2,1,2,4],'?':[6,1,2,0,2],':':[0,2,0,2,0],'/':[1,1,2,4,4],'.':[0,0,0,0,2],
+  '-':[0,0,7,0,0],'(':[2,4,4,4,2],')':[2,1,1,1,2],'=':[0,7,0,7,0],'!':[2,2,2,0,2],',':[0,0,0,2,4],
+  '^':[2,5,0,0,0],'+':[0,2,7,2,0],' ':[0,0,0,0,0]
+};
+const DIG = ['0','1','2','3','4','5','6','7','8','9'];
+
+/* ================================================================
+   CANVASES
+   ================================================================ */
+const cv = document.getElementById('screen');
+const d = cv.getContext('2d');
+const LC = document.createElement('canvas'); LC.width = W; LC.height = H;
+const g = LC.getContext('2d');                 // logical 128x96 canvas
+const BGC = document.createElement('canvas'); BGC.width = W; BGC.height = H;
+const bgx = BGC.getContext('2d');              // pre-rendered static background
+let scale = 1;
+
+function txt(s, x, y, c) {
+  g.fillStyle = PAL[c];
+  let cx = x;
+  for (let k = 0; k < s.length; k++) {
+    const gl = F[s[k]];
+    if (gl) {
+      for (let r = 0; r < 5; r++) {
+        const b = gl[r];
+        if (b) {
+          if (b & 4) g.fillRect(cx, y + r, 1, 1);
+          if (b & 2) g.fillRect(cx + 1, y + r, 1, 1);
+          if (b & 1) g.fillRect(cx + 2, y + r, 1, 1);
+        }
+      }
+    }
+    cx += 4;
+  }
+}
+const tw = s => s.length * 4 - 1;
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp = (a, b, t) => a + (b - a) * t;
+const ease = p => p * p * (3 - 2 * p);
+const slotX = idx => X0 + idx * SLOT;
+
+/* ================================================================
+   SEEDED PRNG (dataset shuffle + visual-effects randomness)
+   ================================================================ */
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function buildDataset(seed) {
+  if (seed === 0) return PRESET.slice();
+  const rnd = mulberry32((seed ^ 0x9E3779B9) >>> 0);
+  const a = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+  for (let k = a.length - 1; k > 0; k--) {
+    const r = Math.floor(rnd() * (k + 1));
+    const t = a[k]; a[k] = a[r]; a[r] = t;
+  }
+  let sorted = true;
+  for (let k = 1; k < a.length; k++) if (a[k - 1] > a[k]) { sorted = false; break; }
+  if (sorted) { const t = a[0]; a[0] = a[1]; a[1] = t; }
+  return a;
+}
+let vr = mulberry32(12345);      // visual-only PRNG, reseeded on every reset
+
+/* ================================================================
+   1) ALGORITHM LAYER  -  the real Selection Sort, as a generator.
+      It owns the array, i, j, minIndex and all counters, and yields
+      semantic events. Nothing else is allowed to mutate this state.
+   ================================================================ */
+const E = {
+  SORT_START:0, PASS_START:1, INITIAL_MIN:2, COMPARE:3, COMPARISON_RESULT:4, NEW_MINIMUM:5,
+  KEEP_MINIMUM:6, SCAN_COMPLETE:7, FINAL_MINIMUM:8, SWAP_START:9, SWAP_PROGRESS:10,
+  SWAP_COMPLETE:11, NO_SWAP_REQUIRED:12, ELEMENT_LOCKED:13, PASS_COMPLETE:14,
+  SORT_COMPLETE:15, RESET:16
+};
+const S = {
+  arr: [], n: 0, i: -1, j: -1, minIndex: -1, minValue: -1, prevMin: -1, oldMinValue: -1,
+  didUpdate: false, sortedCount: 0, cmpCount: 0, minUpd: 0, swaps: 0, scanDone: 0,
+  swapI: -1, swapJ: -1, valA: -1, valB: -1
+};
+
+// ---- event layer: pooled, reused event objects ----
+const POOL = [];
+for (let k = 0; k < 16; k++) POOL.push({
+  type: 0, dur: 0, passIndex: 0, targetIndex: -1, comparisonIndex: -1, minIndex: -1,
+  targetValue: -1, comparisonValue: -1, minValue: -1, didUpdateMinimum: false,
+  swapCount: 0, comparisonCount: 0, minimumUpdateCount: 0,
+  prevMinIndex: -1, oldMinValue: -1, swapI: -1, swapJ: -1
+});
+let poolIdx = 0;
+function ev(type, dur) {
+  poolIdx = (poolIdx + 1) & 15;
+  const e = POOL[poolIdx];
+  e.type = type; e.dur = dur;
+  e.passIndex = S.i + 1; e.targetIndex = S.i; e.comparisonIndex = S.j; e.minIndex = S.minIndex;
+  e.targetValue = S.i >= 0 ? S.arr[S.i] : -1;
+  e.comparisonValue = (S.j >= 0 && S.j < S.n) ? S.arr[S.j] : -1;
+  e.minValue = S.minValue;
+  e.didUpdateMinimum = S.didUpdate;
+  e.swapCount = S.swaps; e.comparisonCount = S.cmpCount; e.minimumUpdateCount = S.minUpd;
+  e.prevMinIndex = S.prevMin; e.oldMinValue = S.oldMinValue;
+  e.swapI = S.swapI; e.swapJ = S.swapJ;
+  return e;
+}
+
+function* selectionSort() {
+  const a = S.arr, n = a.length;
+  yield ev(E.SORT_START, 700);
+  for (let i = 0; i < n - 1; i++) {
+    let minIndex = i;
+    S.i = i; S.j = -1; S.minIndex = i; S.minValue = a[i];
+    S.prevMin = i; S.oldMinValue = a[i]; S.didUpdate = false;
+    S.scanDone = 0; S.swapI = -1; S.swapJ = -1;
+    yield ev(E.PASS_START, 500);
+    yield ev(E.INITIAL_MIN, 400);
+
+    for (let j = i + 1; j < n; j++) {
+      S.j = j; S.cmpCount++; S.scanDone++;
+      S.prevMin = minIndex; S.oldMinValue = a[minIndex]; S.didUpdate = false;
+      yield ev(E.COMPARE, 300);
+
+      if (a[j] < a[minIndex]) {                 // the REAL comparison
+        S.didUpdate = true;
+        yield ev(E.COMPARISON_RESULT, 0);
+        minIndex = j;
+        S.minIndex = minIndex; S.minValue = a[minIndex]; S.minUpd++;
+        yield ev(E.NEW_MINIMUM, 400);
+      } else {
+        S.didUpdate = false;
+        yield ev(E.COMPARISON_RESULT, 0);
+        yield ev(E.KEEP_MINIMUM, 200);
+      }
+    }
+
+    S.j = n;                                    // inner loop finished
+    yield ev(E.SCAN_COMPLETE, 400);
+    yield ev(E.FINAL_MINIMUM, 400);
+
+    if (minIndex !== i) {
+      S.swapI = i; S.swapJ = minIndex; S.valA = a[i]; S.valB = a[minIndex];
+      yield ev(E.SWAP_START, 160);
+      yield ev(E.SWAP_PROGRESS, 400);
+      const tmp = a[i]; a[i] = a[minIndex]; a[minIndex] = tmp;   // the one swap of the pass
+      S.swaps++;
+      yield ev(E.SWAP_COMPLETE, 120);
+    } else {
+      yield ev(E.NO_SWAP_REQUIRED, 500);
+    }
+
+    S.sortedCount = i + 1;                      // prefix grows only after the pass completes
+    yield ev(E.ELEMENT_LOCKED, 400);
+    yield ev(E.PASS_COMPLETE, 0);
+  }
+  S.sortedCount = n; S.j = -1;
+  yield ev(E.SORT_COMPLETE, 1500);
+}
+
+/* ================================================================
+   RUN CONTROL (drives the generator, owns timing)
+   ================================================================ */
+let seed = 0;
+let init = buildDataset(0);
+let gen = null;
+let cur = null;          // current beat (event with dur > 0)
+let t = 0;               // ms elapsed inside current beat
+let running = false, stepPlaying = false, done = false;
+let clock = 0, frame = 0;
+const A = { intro: 0 };  // animation-layer state
+
+function prog() {
+  if (!cur || cur.dur <= 0) return cur ? 1 : 0;
+  const p = t / cur.dur;
+  return p > 1 ? 1 : p;
+}
+
+function resetRun() {
+  S.arr = init.slice(); S.n = S.arr.length;
+  S.i = -1; S.j = -1; S.minIndex = -1; S.minValue = -1; S.prevMin = -1; S.oldMinValue = -1;
+  S.didUpdate = false; S.sortedCount = 0; S.cmpCount = 0; S.minUpd = 0; S.swaps = 0;
+  S.scanDone = 0; S.swapI = -1; S.swapJ = -1; S.valA = -1; S.valB = -1;
+  gen = selectionSort();
+  cur = null; t = 0; running = false; stepPlaying = false; done = false;
+  A.intro = 0;
+  vr = mulberry32(12345);
+  for (let k = 0; k < PN; k++) pL[k] = 0;
+  refreshUI();
+  updateButtons();
+}
+
+// pull the next beat; zero-duration events are dispatched but not waited on
+function pull() {
+  for (;;) {
+    const r = gen.next();
+    if (r.done) return false;
+    const e = r.value;
+    dispatch(e);
+    if (e.dur > 0) { cur = e; t = 0; refreshUI(); return true; }
+  }
+}
+function finish() {
+  running = false; stepPlaying = false; done = true;
+  refreshUI(); updateButtons();
+}
+
+/* ================================================================
+   3) ANIMATION LAYER - consumes events, never decides anything
+   ================================================================ */
+const PN = 96;
+const pX = new Float32Array(PN), pY = new Float32Array(PN), pVX = new Float32Array(PN), pVY = new Float32Array(PN);
+const pL = new Int16Array(PN), pC = new Uint8Array(PN), pS = new Uint8Array(PN);
+let pHead = 0;
+function spawn(x, y, vx, vy, life, c, s) {
+  const k = pHead; pHead = (pHead + 1) % PN;
+  pX[k] = x; pY[k] = y; pVX[k] = vx; pVY[k] = vy; pL[k] = life; pC[k] = c; pS[k] = s;
+}
+const COLS_MIN = [11, 4, 10], COLS_PLACE = [4, 11, 10, 21], COLS_LOCK = [13, 4, 14], COLS_FW = [11, 21, 16, 13, 4];
+function burst(x, y, n, cols, spd, life) {
+  for (let k = 0; k < n; k++) {
+    const a = vr() * 6.2832, sp = spd * (0.4 + vr() * 0.8);
+    spawn(x, y, Math.cos(a) * sp, Math.sin(a) * sp - spd * 0.4, life + ((vr() * 10) | 0), cols[k % cols.length], vr() < 0.3 ? 2 : 1);
+  }
+}
+function updateParticles() {
+  for (let k = 0; k < PN; k++) {
+    if (pL[k] > 0) { pX[k] += pVX[k]; pY[k] += pVY[k]; pVY[k] += 0.06; pL[k]--; }
+  }
+}
+function drawParticles() {
+  for (let k = 0; k < PN; k++) {
+    const l = pL[k];
+    if (l > 0 && (l > 8 || (l & 1))) {
+      g.fillStyle = PAL[pC[k]];
+      g.fillRect(Math.round(pX[k]), Math.round(pY[k]), pS[k], pS[k]);
+    }
+  }
+}
+
+// called once for every event (including zero-duration ones)
+function dispatch(e) {
+  sfx(e);
+  switch (e.type) {
+    case E.NEW_MINIMUM:
+      burst(slotX(e.minIndex) + 4, BASE - e.minValue * SC - 2, 12, COLS_MIN, 1.1, 22); break;
+    case E.SWAP_COMPLETE:
+      burst(slotX(e.swapI) + 4, BASE - S.arr[e.swapI] * SC - 2, 16, COLS_PLACE, 1.6, 28);
+      burst(slotX(e.swapJ) + 4, BASE - S.arr[e.swapJ] * SC - 2, 10, COLS_PLACE, 1.2, 24); break;
+    case E.ELEMENT_LOCKED:
+      burst(slotX(e.targetIndex) + 4, BASE - S.arr[e.targetIndex] * SC - 2, 8, COLS_LOCK, 0.9, 20); break;
+    default: break;
+  }
+}
+
+/* ================================================================
+   5) AUDIO LAYER - procedural 8-bit, reacts to events only
+   ================================================================ */
+let AC = null, master = null, noiseBuf = null, soundOn = true, vol = 0.5;
+function ensureAudio() {
+  if (!AC) {
+    const C = window.AudioContext || window.webkitAudioContext;
+    if (!C) return;
+    AC = new C();
+    master = AC.createGain(); master.gain.value = vol * 0.6; master.connect(AC.destination);
+    const len = Math.floor(AC.sampleRate * 0.3), r = mulberry32(777);
+    noiseBuf = AC.createBuffer(1, len, AC.sampleRate);
+    const ch = noiseBuf.getChannelData(0);
+    for (let k = 0; k < len; k++) ch[k] = r() * 2 - 1;
+  }
+  if (AC.state === 'suspended') AC.resume();
+}
+function tone(f, dur, type, v, delay, to) {
+  if (!AC || !soundOn) return;
+  const t0 = AC.currentTime + (delay || 0);
+  const o = AC.createOscillator(), gn = AC.createGain();
+  o.type = type; o.frequency.setValueAtTime(f, t0);
+  if (to) o.frequency.linearRampToValueAtTime(to, t0 + dur);
+  gn.gain.setValueAtTime(0, t0); gn.gain.linearRampToValueAtTime(v, t0 + 0.004); gn.gain.linearRampToValueAtTime(0, t0 + dur);
+  o.connect(gn); gn.connect(master); o.start(t0); o.stop(t0 + dur + 0.02);
+}
+function noise(dur, v, delay) {
+  if (!AC || !soundOn) return;
+  const t0 = AC.currentTime + (delay || 0);
+  const s = AC.createBufferSource(); s.buffer = noiseBuf;
+  const gn = AC.createGain(); gn.gain.setValueAtTime(v, t0); gn.gain.linearRampToValueAtTime(0, t0 + dur);
+  s.connect(gn); gn.connect(master); s.start(t0); s.stop(t0 + dur + 0.02);
+}
+function sfx(e) {
+  if (!AC || !soundOn) return;
+  switch (e.type) {
+    case E.SORT_START:
+      tone(262, 0.08, 'square', 0.12, 0); tone(330, 0.08, 'square', 0.12, 0.07);
+      tone(392, 0.08, 'square', 0.12, 0.14); tone(523, 0.14, 'square', 0.12, 0.21); break;
+    case E.PASS_START: tone(147, 0.12, 'triangle', 0.3); break;
+    case E.INITIAL_MIN: tone(220, 0.08, 'triangle', 0.22); break;
+    case E.COMPARE: tone(300 + Math.max(0, e.comparisonValue) * 25, 0.04, 'square', 0.05); break;
+    case E.NEW_MINIMUM:
+      tone(660, 0.07, 'square', 0.13); tone(990, 0.12, 'square', 0.13, 0.07); tone(1320, 0.08, 'square', 0.06, 0.14); break;
+    case E.KEEP_MINIMUM: tone(120, 0.05, 'triangle', 0.22); break;
+    case E.SCAN_COMPLETE: tone(523, 0.07, 'square', 0.1); tone(659, 0.1, 'square', 0.1, 0.07); break;
+    case E.FINAL_MINIMUM: tone(440, 0.05, 'triangle', 0.18); break;
+    case E.SWAP_START: tone(392, 0.08, 'square', 0.12); tone(262, 0.1, 'square', 0.12, 0.08); break;
+    case E.SWAP_COMPLETE: noise(0.08, 0.16); tone(110, 0.1, 'triangle', 0.35); break;
+    case E.NO_SWAP_REQUIRED: tone(330, 0.08, 'triangle', 0.22); tone(330, 0.08, 'triangle', 0.22, 0.1); break;
+    case E.ELEMENT_LOCKED: tone(1047, 0.06, 'square', 0.09); tone(1319, 0.1, 'square', 0.09, 0.06); break;
+    case E.SORT_COMPLETE: {
+      const n = [523, 659, 784, 1047, 0, 784, 1047, 1319];
+      for (let k = 0; k < n.length; k++) if (n[k]) tone(n[k], 0.13, 'square', 0.11, k * 0.13);
+      tone(131, 0.5, 'triangle', 0.3, 0); tone(196, 0.5, 'triangle', 0.3, 0.52); break;
+    }
+    case E.RESET: tone(440, 0.08, 'square', 0.1, 0, 220); break;
+    default: break;
+  }
+}
+
+/* ================================================================
+   UI TEXT CACHE (built per beat, not per frame)
+   ================================================================ */
+const hv = ['', '', '', '', '', '', '', ''];
+const HL = ['PASS', 'TARGET', 'COMPARE', 'SCAN', 'MIN IDX', 'MIN VAL', 'SWAPS', 'UPDATES'];
+const HC = [4, C_CYAN, C_PINK, 4, C_YELLOW, C_YELLOW, 4, 4];
+const ui = {
+  banL: '', banR: '', banRc: 4, ex1: '', ex2: '', sum1: '', sum2: '',
+  status: 'READY', statusBg: 7, statusFg: 4, cmpTxt: 'CMP 0/36'
+};
+const STAT = [
+  ['START', 18, 4], ['NEW PASS', 18, 4], ['SET MIN', 12, 4], ['SCANNING', 18, 4], ['', 0, 0],
+  ['NEW MIN', 12, 4], ['SCANNING', 18, 4], ['SCAN DONE', 15, 4], ['MIN FOUND', 12, 4],
+  ['PLACING', 9, 4], ['PLACING', 9, 4], ['PLACING', 9, 4], ['NO SWAP', 7, 4], ['LOCKED', 15, 4],
+  ['', 0, 0], ['COMPLETE', 15, 11]
+];
+const TICK = [
+  'TIME BEST O(N^2) AVG O(N^2)',
+  'TIME WORST O(N^2) SPACE O(1)',
+  'IN-PLACE: YES STABLE: NO',
+  'SWAPS <= N-1  CMPS = N(N-1)/2',
+  'NOT BUBBLE: 1 SWAP PER PASS',
+  'SCAN ALL > REMEMBER MIN > SWAP',
+  'SORTED ARRAY STILL COSTS O(N^2)'
+];
+
+function refreshUI() {
+  const T = cur ? cur.type : -1, n = S.n, i = S.i;
+  const total = n * (n - 1) / 2;
+  const complete = T === E.SORT_COMPLETE;
+  hv[0] = (i < 0 ? 0 : (complete ? n - 1 : i + 1)) + '/' + (n - 1);
+  hv[1] = (i >= 0 && !complete) ? '' + i : '-';
+  hv[2] = (S.j >= 0 && S.j < n && !complete) ? '' + S.j : '-';
+  hv[3] = (i >= 0 && !complete) ? S.scanDone + '/' + (n - 1 - i) : '-';
+  hv[4] = (S.minIndex >= 0 && !complete) ? '' + S.minIndex : '-';
+  hv[5] = (S.minIndex >= 0 && !complete) ? '' + S.minValue : '-';
+  hv[6] = '' + S.swaps;
+  hv[7] = '' + S.minUpd;
+  ui.cmpTxt = 'CMP ' + S.cmpCount + '/' + total;
+
+  const st = T < 0 ? ['READY', 7, 4] : STAT[T];
+  ui.status = st[0]; ui.statusBg = st[1]; ui.statusFg = st[2];
+
+  const pass = 'PASS ' + (i + 1);
+  const cv_ = cur ? cur.comparisonValue : -1;
+  ui.banL = ''; ui.banRc = 4;
+  switch (T) {
+    case -1:
+      ui.banR = 'PRESS START'; ui.banRc = C_YELLOW;
+      ui.ex1 = 'FIND THE MINIMUM, REMEMBER ITS'; ui.ex2 = 'INDEX, THEN SWAP ONCE PER PASS.'; break;
+    case E.SORT_START:
+      ui.banR = 'SORT START'; ui.banRc = C_CYAN;
+      ui.ex1 = 'GET READY. EVERY PASS SCANS'; ui.ex2 = 'THE WHOLE UNSORTED REGION.'; break;
+    case E.PASS_START:
+      ui.banL = pass; ui.banR = 'TARGET INDEX: ' + i; ui.banRc = C_CYAN;
+      ui.ex1 = 'START AT THE BEGINNING OF'; ui.ex2 = 'THE UNSORTED REGION.'; break;
+    case E.INITIAL_MIN:
+      ui.banL = pass; ui.banR = 'INITIAL MIN: ' + S.minValue; ui.banRc = C_YELLOW;
+      ui.ex1 = 'ASSUME THE FIRST ELEMENT'; ui.ex2 = 'IS THE MINIMUM FOR NOW.'; break;
+    case E.COMPARE:
+      ui.banL = cv_ + ' < ' + S.minValue + ' ?'; ui.banR = 'COMPARE'; ui.banRc = C_PINK;
+      ui.ex1 = 'COMPARE THE CURRENT VALUE'; ui.ex2 = 'WITH THE SMALLEST SO FAR.'; break;
+    case E.NEW_MINIMUM:
+      ui.banL = cv_ + ' < ' + cur.oldMinValue + ' ?'; ui.banR = 'YES > NEW MIN'; ui.banRc = C_YELLOW;
+      ui.ex1 = 'A SMALLER VALUE WAS FOUND.'; ui.ex2 = 'REMEMBER ITS INDEX.'; break;
+    case E.KEEP_MINIMUM:
+      ui.banL = cv_ + ' < ' + S.minValue + ' ?'; ui.banR = 'NO > KEEP MIN'; ui.banRc = C_GREY + 0;
+      ui.ex1 = 'KEEP SCANNING. THE MINIMUM'; ui.ex2 = 'MAY STILL CHANGE.'; break;
+    case E.SCAN_COMPLETE:
+      ui.banL = pass; ui.banR = 'SCAN COMPLETE'; ui.banRc = C_GREEN + 0;
+      ui.ex1 = 'THE MINIMUM FOR THIS ENTIRE'; ui.ex2 = 'REGION HAS BEEN FOUND.'; break;
+    case E.FINAL_MINIMUM:
+      ui.banL = pass; ui.banR = 'FINAL MIN: ' + S.minValue; ui.banRc = C_YELLOW;
+      ui.ex1 = 'MIN ' + S.minValue + ' IS AT INDEX ' + S.minIndex + '.';
+      ui.ex2 = S.minIndex === i ? 'IT IS ALREADY AT TARGET ' + i + '.' : 'MOVE IT TO TARGET INDEX ' + i + '.'; break;
+    case E.SWAP_START: case E.SWAP_PROGRESS: case E.SWAP_COMPLETE:
+      ui.banL = 'SWAP ' + S.valA + ' <> ' + S.valB; ui.banR = 'PLACE MINIMUM'; ui.banRc = C_ORANGE;
+      ui.ex1 = 'PLACE THE MINIMUM AT THE'; ui.ex2 = 'START OF THE UNSORTED REGION.'; break;
+    case E.NO_SWAP_REQUIRED:
+      ui.banL = 'NO SWAP'; ui.banR = 'MIN ALREADY IN PLACE'; ui.banRc = C_LIME;
+      ui.ex1 = 'THE MINIMUM IS ALREADY IN'; ui.ex2 = 'THE CORRECT POSITION.'; break;
+    case E.ELEMENT_LOCKED:
+      ui.banL = pass; ui.banR = 'LOCKED INDEX ' + i; ui.banRc = C_LIME;
+      ui.ex1 = 'THE SORTED PREFIX GROWS BY'; ui.ex2 = 'ONE ELEMENT.'; break;
+    case E.SORT_COMPLETE:
+      ui.banR = 'SORT COMPLETE'; ui.banRc = C_YELLOW;
+      ui.ex1 = 'EVERY POSITION NOW HOLDS THE'; ui.ex2 = 'SMALLEST REMAINING VALUE.';
+      ui.sum1 = 'PASSES ' + (n - 1) + '  COMPARISONS ' + S.cmpCount;
+      ui.sum2 = 'MIN UPDATES ' + S.minUpd + '  SWAPS ' + S.swaps; break;
+    default: break;
+  }
+}
+
+/* ================================================================
+   4) RENDERING LAYER - reads state, never mutates the algorithm
+   ================================================================ */
+function buildBG() {
+  const c = bgx;
+  c.fillStyle = PAL[C_BG]; c.fillRect(0, 0, W, H);
+  c.fillStyle = PAL[C_PANEL];
+  for (let y = 14; y < 70; y++) for (let x = 1; x < 84; x++) if (((x * 3 + y * 5) % 7) === 0) c.fillRect(x, y, 1, 1);
+  c.fillStyle = PAL[C_PANEL]; c.fillRect(0, 0, W, 12);
+  c.fillStyle = PAL[C_BORDER]; c.fillRect(0, 12, W, 1);
+  // HUD panel
+  c.fillStyle = PAL[C_PANEL]; c.fillRect(85, 13, 43, 58);
+  c.fillStyle = PAL[C_BORDER];
+  c.fillRect(85, 13, 1, 58); c.fillRect(127, 13, 1, 58);
+  c.fillRect(85, 70, 43, 1);
+  // array box borders
+  c.fillRect(0, 13, 1, 58); c.fillRect(84, 13, 1, 58); c.fillRect(0, 70, 85, 1);
+  c.fillStyle = PAL[C_DGREY]; c.fillRect(86, 13, 1, 57); c.fillRect(1, 13, 1, 57);
+  // bottom panel
+  c.fillStyle = PAL[C_PANEL]; c.fillRect(0, 71, W, 25);
+  c.fillStyle = PAL[C_BORDER];
+  c.fillRect(0, 71, W, 1); c.fillRect(0, 71, 1, 25); c.fillRect(127, 71, 1, 25); c.fillRect(0, 95, W, 1);
+  c.fillStyle = PAL[C_DGREY]; c.fillRect(1, 89, 126, 1);
+}
+
+function hline(x1, x2, y, c) { g.fillStyle = PAL[c]; g.fillRect(x1, y, x2 - x1 + 1, 1); }
+
+function drawBrackets() {
+  const sc = S.sortedCount, n = S.n;
+  if (sc > 0) {
+    const x1 = slotX(0) + 1, x2 = slotX(sc - 1) + 7;
+    hline(x1, x2, 19, C_LIME);
+    g.fillStyle = PAL[C_LIME]; g.fillRect(x1, 19, 1, 3); g.fillRect(x2, 19, 1, 3);
+    if (x2 - x1 >= 27) txt('SORTED', Math.round((x1 + x2) / 2 - 11), 14, C_LIME);
+  }
+  if (sc < n) {
+    const x1 = slotX(sc) + 1, x2 = slotX(n - 1) + 7;
+    g.fillStyle = PAL[C_CYAN];
+    for (let x = x1; x <= x2; x += 2) g.fillRect(x, 19, 1, 1);
+    g.fillRect(x1, 19, 1, 3); g.fillRect(x2, 19, 1, 3);
+    // scan-direction chevron
+    g.fillRect(x2 - 5, 17, 1, 1); g.fillRect(x2 - 4, 18, 1, 1); g.fillRect(x2 - 3, 19, 1, 1);
+    g.fillRect(x2 - 4, 20, 1, 1); g.fillRect(x2 - 5, 21, 1, 1);
+    if (x2 - x1 >= 40) txt('UNSORTED', Math.round((x1 + x2) / 2 - 15), 14, C_CYAN);
+  }
+  if (sc > 0 && sc < n) {                       // divider between sorted prefix and unsorted region
+    const x = slotX(sc) - 1;
+    g.fillStyle = PAL[C_LIME];
+    for (let y = 22; y < 46; y += 3) g.fillRect(x, y, 1, 2);
+  }
+}
+
+function bar(x, val, lift, st, gr) {
+  const h = Math.floor(val * SC * gr);
+  if (h <= 0) return;
+  const y = BASE - h - lift;
+  g.fillStyle = PAL[st[0]]; g.fillRect(x, y, BW, h);
+  g.fillStyle = PAL[st[1]]; g.fillRect(x, y, BW, 1); g.fillRect(x, y, 1, h);
+  g.fillStyle = PAL[st[2]]; g.fillRect(x + BW - 1, y + 1, 1, h - 1);
+  if (h > 4) { g.fillRect(x + 1, y + h - 1, BW - 2, 1); g.fillStyle = PAL[st[1]]; g.fillRect(x + 2, y + 2, 1, 1); }
+  if (gr >= 1) txt(DIG[val], x + 2, y - 6, st[3]);
+}
+
+function styleFor(idx, T, p) {
+  if (idx < S.sortedCount) {
+    if (T === E.ELEMENT_LOCKED && idx === S.i && p < 0.5) return ST_FLASH;
+    return ST_SORT;
+  }
+  if (T >= E.INITIAL_MIN && T <= E.NO_SWAP_REQUIRED) {
+    if (T === E.NEW_MINIMUM && idx === S.minIndex && p < 0.3) return ST_FLASH;
+    if (idx === S.minIndex || (T === E.NEW_MINIMUM && idx === cur.prevMinIndex && p < 0.5)) {
+      if (T === E.NO_SWAP_REQUIRED && ((frame >> 3) & 1)) return ST_FLASH;
+      return ST_MIN;
+    }
+  }
+  if ((T === E.COMPARE || T === E.KEEP_MINIMUM) && idx === S.j) return ST_CMP;
+  if (T >= E.PASS_START && T <= E.NO_SWAP_REQUIRED && idx === S.i) return ST_TGT;
+  return ST_UNS;
+}
+
+function corners(pos, c) {
+  const x = Math.round(X0 + pos * SLOT), y0 = 22, y1 = 46;
+  g.fillStyle = PAL[c];
+  g.fillRect(x, y0, 3, 1); g.fillRect(x, y0, 1, 3); g.fillRect(x + 6, y0, 3, 1); g.fillRect(x + 8, y0, 1, 3);
+  g.fillRect(x, y1, 3, 1); g.fillRect(x, y1 - 2, 1, 3); g.fillRect(x + 6, y1, 3, 1); g.fillRect(x + 8, y1 - 2, 1, 3);
+}
+function tag(s, pos, y, c) {
+  const cx = Math.round(X0 + pos * SLOT + 4), w = tw(s);
+  const x = clamp(cx - (w >> 1), 2, 83 - w);
+  g.fillStyle = PAL[c]; g.fillRect(cx - 1, y - 1, 3, 1);
+  txt(s, x, y, c);
+}
+function minPos() {
+  const T = cur.type, p = prog();
+  if (T === E.NEW_MINIMUM) return lerp(cur.prevMinIndex, cur.minIndex, ease(Math.min(1, p * 1.4)));
+  if (T === E.SWAP_START) return cur.swapJ;
+  if (T === E.SWAP_PROGRESS) return lerp(cur.swapJ, cur.swapI, ease(p));
+  if (T === E.SWAP_COMPLETE) return cur.swapI;
+  return S.minIndex;
+}
+function cmpPos() {
+  const j = cur.comparisonIndex;
+  return cur.type === E.COMPARE ? lerp(j - 1, j, ease(Math.min(1, prog() * 2.2))) : j;
+}
+
+function drawArray() {
+  const n = S.n, T = cur ? cur.type : -1, p = prog();
+  const sc = S.sortedCount;
+  drawBrackets();
+
+  // baseline, sorted-prefix plate, target plate
+  g.fillStyle = PAL[C_DGREY]; g.fillRect(X0, BASE, n * SLOT - 1, 1);
+  if (sc > 0) { g.fillStyle = PAL[C_GREEN]; g.fillRect(X0, BASE, sc * SLOT - 1, 1); }
+  const targetVis = T >= E.PASS_START && T <= E.NO_SWAP_REQUIRED;
+  const minVis = T >= E.INITIAL_MIN && T <= E.NO_SWAP_REQUIRED;
+  const cmpVis = T === E.COMPARE || T === E.KEEP_MINIMUM;
+  if (targetVis) { g.fillStyle = PAL[C_CYAN]; g.fillRect(slotX(S.i) + 1, BASE, 7, 2); }
+  if (T === E.SWAP_COMPLETE && p < 0.5) {
+    g.fillStyle = PAL[C_WHITE]; g.fillRect(slotX(cur.swapI), BASE, 9, 2); g.fillRect(slotX(cur.swapJ), BASE, 9, 2);
+  }
+
+  // bars
+  const swapping = T >= E.SWAP_START && T <= E.SWAP_COMPLETE;
+  const sI = cur ? cur.swapI : -1, sJ = cur ? cur.swapJ : -1;
+  const sweepPx = T === E.SORT_COMPLETE ? X0 + p * n * SLOT : -1;
+  for (let idx = 0; idx < n; idx++) {
+    if (swapping && (idx === sI || idx === sJ)) continue;
+    const gr = clamp((A.intro - idx * 70) / 350, 0, 1);
+    let st = styleFor(idx, T, p);
+    if (T === E.SORT_COMPLETE && slotX(idx) + BW < sweepPx) st = ST_FINAL;
+    bar(slotX(idx) + 1, S.arr[idx], 0, st, gr);
+    if (T === E.SORT_COMPLETE && st === ST_FINAL && (((frame >> 3) + idx) % 9) === 0) {
+      g.fillStyle = PAL[C_WHITE]; g.fillRect(slotX(idx) + 3, BASE - S.arr[idx] * SC - 2, 1, 1);
+    }
+  }
+  if (swapping) {                                 // the one deliberate swap of the pass
+    const LA = 3, LB = 6;
+    let xa, xb, la, lb;
+    if (T === E.SWAP_START) { const e = ease(p); xa = slotX(sI); xb = slotX(sJ); la = LA * e; lb = LB * e; }
+    else if (T === E.SWAP_PROGRESS) {
+      const e = ease(p), arc = Math.sin(p * Math.PI) * 3;
+      xa = lerp(slotX(sI), slotX(sJ), e); xb = lerp(slotX(sJ), slotX(sI), e); la = LA + arc * 0.5; lb = LB + arc;
+    } else { const e = 1 - ease(p); xa = slotX(sJ); xb = slotX(sI); la = LA * e; lb = LB * e; }
+    const flash = T === E.SWAP_COMPLETE && p < 0.5;
+    bar(Math.round(xa) + 1, S.valA, Math.round(la), flash ? ST_FLASH : ST_TGT, 1);
+    bar(Math.round(xb) + 1, S.valB, Math.round(lb), flash ? ST_FLASH : ST_MIN, 1);
+  }
+  if (T === E.SORT_COMPLETE && p < 1) {           // left-to-right pixel sweep
+    const x = Math.round(sweepPx);
+    g.fillStyle = PAL[C_CYAN]; g.fillRect(x - 2, 22, 1, 24);
+    g.fillStyle = PAL[C_WHITE]; g.fillRect(x - 1, 22, 1, 24);
+    if (frame % 5 === 0) burst(x, 30 + ((vr() * 14) | 0), 3, COLS_FW, 0.9, 18);
+  }
+
+  // index digits
+  for (let idx = 0; idx < n; idx++) txt(DIG[idx], slotX(idx) + 3, 47, idx < sc ? C_GREEN : C_GREY);
+
+  // markers
+  if (cmpVis) { const cp = cmpPos(); corners(cp, C_RED); tag('COMPARE', cp, 65, C_PINK); }
+  if (minVis) {
+    const mp = minPos();
+    corners(mp, ((frame >> 2) & 1) && (T === E.NEW_MINIMUM) ? C_WHITE : C_YELLOW);
+    let s = 'MIN';
+    if (T === E.NEW_MINIMUM) s = 'NEW MINIMUM';
+    else if (T === E.KEEP_MINIMUM) s = 'KEEP MIN';
+    else if (T === E.NO_SWAP_REQUIRED) s = 'MIN ALREADY IN PLACE';
+    else if (swapping) s = 'PLACE MINIMUM';
+    tag(s, mp, 59, C_YELLOW);
+  }
+  if (targetVis) tag('TARGET', S.i, 53, C_CYAN);
+}
+
+function drawHUD() {
+  for (let k = 0; k < 8; k++) {
+    const y = 15 + k * 6;
+    txt(HL[k], 88, y, C_GREY);
+    txt(hv[k], 125 - tw(hv[k]), y, HC[k]);
+  }
+  g.fillStyle = PAL[ui.statusBg]; g.fillRect(87, 62, 39, 7);
+  txt(ui.status, 87 + ((39 - tw(ui.status)) >> 1), 63, ui.statusFg);
+}
+
+function drawTitle() {
+  txt('SELECTION SORT', 3, 2, C_DGREY);
+  txt('SELECTION SORT', 2, 1, C_YELLOW);
+  txt('SCAN>REMEMBER MIN>PLACE MIN', 2, 7, C_LGREY);
+  const st = 'SEED ' + seed;
+  txt(st, 62, 1, C_GREY);
+  txt(ui.cmpTxt, 126 - tw(ui.cmpTxt), 1, C_LGREY);
+  // real progress: comparisons executed / total comparisons of the algorithm
+  const total = S.n * (S.n - 1) / 2;
+  const fw = Math.floor(W * S.cmpCount / total);
+  g.fillStyle = PAL[C_LIME]; g.fillRect(0, 12, fw, 1);
+}
+
+function drawBottom() {
+  const T = cur ? cur.type : -1;
+  if (ui.banL) txt(ui.banL, 3, 73, C_WHITE);
+  let rc = ui.banRc;
+  if (T === E.NEW_MINIMUM) rc = ((frame >> 3) & 1) ? C_YELLOW : C_ORANGE;
+  else if (T === E.SORT_COMPLETE || T === -1) rc = ((frame >> 4) & 1) ? C_YELLOW : C_WHITE;
+  txt(ui.banR, 125 - tw(ui.banR), 73, rc);
+  let e1 = ui.ex1, e2 = ui.ex2;
+  if (T === E.SORT_COMPLETE && (((clock / 2600) | 0) & 1)) { e1 = ui.sum1; e2 = ui.sum2; }
+  txt(e1, 3, 79, C_LGREY);
+  txt(e2, 3, 85, C_LGREY);
+  txt(TICK[((clock / 2400) | 0) % TICK.length], 3, 91, C_GREY);
+}
+
+function render() {
+  g.drawImage(BGC, 0, 0);
+  drawTitle();
+  drawArray();
+  drawHUD();
+  drawBottom();
+  drawParticles();
+  d.drawImage(LC, 0, 0, W * scale, H * scale);
+}
+
+/* ================================================================
+   UPDATE / MAIN LOOP (fixed 60 Hz simulation step)
+   ================================================================ */
+function update(dt) {
+  clock += dt; frame++;
+  A.intro += dt;
+  if (cur && (running || stepPlaying)) {
+    t += dt;
+    if (t >= cur.dur) {
+      t = cur.dur;
+      stepPlaying = false;
+      if (cur.type === E.SORT_COMPLETE) finish();
+      else if (running && !pull()) finish();
+    }
+  }
+  updateParticles();
+}
+let last = 0, acc = 0;
+function loop(ts) {
+  if (!last) last = ts;
+  let dt = ts - last; last = ts;
+  if (dt > 250) dt = 250;
+  acc += dt;
+  let n = 0;
+  while (acc >= STEP_MS && n < 8) { update(STEP_MS); acc -= STEP_MS; n++; }
+  if (n === 8) acc = 0;
+  render();
+  requestAnimationFrame(loop);
+}
+
+/* ================================================================
+   CONTROLS
+   ================================================================ */
+const $ = id => document.getElementById(id);
+const bStart = $('bStart'), bPause = $('bPause'), bStep = $('bStep'), bReset = $('bReset'),
+      bShuffle = $('bShuffle'), bSound = $('bSound'), volEl = $('vol'), barEl = $('bar'), stageEl = $('stage');
+
+function updateButtons() {
+  bStart.textContent = !cur ? 'START' : (running ? 'RUNNING' : 'RESUME');
+  bStart.disabled = done || running;
+  bPause.disabled = !running;
+  bStep.disabled = done;
+}
+function onStart() {
+  ensureAudio();
+  if (done || running) return;
+  if (!cur && !pull()) { finish(); return; }
+  running = true; stepPlaying = false;
+  updateButtons();
+}
+function onPause() { running = false; updateButtons(); }
+function onStep() {
+  ensureAudio();
+  if (done) return;
+  running = false;
+  if (!cur) { pull(); stepPlaying = true; }
+  else if (stepPlaying) { t = cur.dur; if (!pull()) { finish(); return; } stepPlaying = true; }
+  else if (t < cur.dur) { stepPlaying = true; }               // finish the remainder of a paused event
+  else {
+    if (cur.type === E.SORT_COMPLETE) { finish(); return; }
+    if (!pull()) { finish(); return; }
+    stepPlaying = true;
+  }
+  updateButtons();
+}
+function onReset() { ensureAudio(); resetRun(); sfx({ type: E.RESET }); }
+function onShuffle() {
+  ensureAudio();
+  seed++; init = buildDataset(seed);
+  try { history.replaceState(null, '', '#seed=' + seed); } catch (e) { /* ignore */ }
+  resetRun(); sfx({ type: E.RESET });
+}
+function onSound() {
+  ensureAudio(); soundOn = !soundOn;
+  bSound.textContent = soundOn ? 'SOUND ON' : 'SOUND OFF';
+}
+function bind(el, fn) { el.addEventListener('click', () => { fn(); el.blur(); }); }
+bind(bStart, onStart); bind(bPause, onPause); bind(bStep, onStep);
+bind(bReset, onReset); bind(bShuffle, onShuffle); bind(bSound, onSound);
+volEl.addEventListener('input', () => { vol = volEl.value / 100; if (master) master.gain.value = vol * 0.6; });
+document.addEventListener('keydown', e => {
+  if (e.target && (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT')) return;
+  const k = e.key;
+  if (k === ' ') { e.preventDefault(); running ? onPause() : onStart(); }
+  else if (k === 'n' || k === 'N' || k === 'ArrowRight') onStep();
+  else if (k === 'r' || k === 'R') onReset();
+  else if (k === 's' || k === 'S') onShuffle();
+  else if (k === 'm' || k === 'M') onSound();
+});
+
+function layout() {
+  const dpr = window.devicePixelRatio || 1;
+  const barH = barEl.offsetHeight;
+  stageEl.style.bottom = barH + 'px';
+  const aw = window.innerWidth * dpr, ah = (window.innerHeight - barH) * dpr;
+  scale = Math.max(1, Math.floor(Math.min(aw / W, ah / H)));       // largest integer factor that fits
+  cv.width = W * scale; cv.height = H * scale;
+  cv.style.width = (W * scale / dpr) + 'px'; cv.style.height = (H * scale / dpr) + 'px';
+  d.imageSmoothingEnabled = false;
+  g.imageSmoothingEnabled = false;
+}
+window.addEventListener('resize', layout);
+
+/* ================================================================
+   BOOT
+   ================================================================ */
+(function boot() {
+  const m = /seed=(\d+)/.exec(location.hash || '');
+  if (m) { seed = parseInt(m[1], 10) || 0; init = buildDataset(seed); }
+  buildBG(); layout(); resetRun();
+  window.__selectionSort = { S, E, POOL, get cur() { return cur; }, get done() { return done; },
+    controls: { onStart, onPause, onStep, onReset, onShuffle }, loop, update, render, buildDataset };
+  requestAnimationFrame(loop);
+})();
+})();
+</script>
+</body>
+</html>

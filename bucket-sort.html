@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bucket Sort - 16-bit Visualizer</title>
+<style>
+html,body{margin:0;height:100%;background:#05060d;color:#c9d1ee;font-family:"Courier New",monospace}
+body{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;overflow:hidden}
+#view{display:block;image-rendering:crisp-edges;image-rendering:pixelated;background:#0b0d1a;border:4px solid #232a52;box-sizing:content-box}
+#controls{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;padding:0 8px}
+button{font:bold 12px "Courier New",monospace;letter-spacing:1px;text-transform:uppercase;color:#f4f6ff;background:#3a6fe0;border:0;padding:8px 12px;cursor:pointer;
+box-shadow:inset -3px -3px 0 #25409a,inset 3px 3px 0 #4cc3f0,0 0 0 3px #05060d}
+button:hover{background:#4a80f0}
+button:active{transform:translate(2px,2px)}
+button:disabled{background:#3a4480;color:#8f9bc7;cursor:default;box-shadow:inset -3px -3px 0 #232a52,inset 3px 3px 0 #5b658f,0 0 0 3px #05060d}
+#bStart{background:#2fa04a;box-shadow:inset -3px -3px 0 #1e6a3a,inset 3px 3px 0 #8fd23f,0 0 0 3px #05060d}
+#bReset{background:#e0413c;box-shadow:inset -3px -3px 0 #8f2a3a,inset 3px 3px 0 #f08a2c,0 0 0 3px #05060d}
+</style>
+</head>
+<body>
+<canvas id="view" width="128" height="96" aria-label="Bucket Sort visualizer"></canvas>
+<div id="controls">
+  <button id="bStart">Start</button>
+  <button id="bPause">Pause</button>
+  <button id="bStep">Step</button>
+  <button id="bReset">Reset</button>
+  <button id="bShuffle">Shuffle</button>
+  <button id="bSound">Sound: on</button>
+  <button id="bSpeed">Speed 1x</button>
+  <button id="bInfo" disabled>Info</button>
+</div>
+<script>
+(function () {
+'use strict';
+
+/* =====================================================================
+   CONSTANTS, PALETTE (24 colours), PRNG
+   ===================================================================== */
+const W = 128, H = 96;
+const C = {
+  bg0:'#0b0d1a', bg1:'#161a33', bg2:'#232a52', line:'#3a4480', dim:'#5b658f', mid:'#8f9bc7', light:'#c9d1ee', white:'#f4f6ff',
+  red:'#e0413c', red2:'#8f2a3a', orange:'#f08a2c', yellow:'#f7d64a', lime:'#8fd23f', green:'#2fa04a', green2:'#1e6a3a', teal:'#33c9b3',
+  cyan:'#4cc3f0', blue:'#3a6fe0', blue2:'#25409a', purple:'#8a55d6', magenta:'#d64fa8', pink:'#f29bc0', brown:'#8a5a34', black:'#05060d'
+};
+const BC = [C.cyan, C.lime, C.yellow, C.orange, C.pink];      // bucket bright colours
+const BD = [C.blue2, C.green2, C.brown, C.red2, C.purple];    // bucket dark colours
+
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+const INITIAL = [42, 7, 91, 33, 68, 15, 84, 26, 53, 3, 76, 47];
+const N = INITIAL.length, K = 5, SEED = 0xB0C4E7;
+let shuffleCount = 0;
+let curInput = INITIAL.slice();
+
+function permutation(cnt) {
+  const a = INITIAL.slice();
+  if (cnt === 0) return a;
+  const r = mulberry32(SEED + cnt * 7919);
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(r() * (i + 1));
+    const t = a[i]; a[i] = a[j]; a[j] = t;
+  }
+  return a;
+}
+
+/* =====================================================================
+   EVENTS
+   ===================================================================== */
+const EV = {
+  SORT_START:1, DISTRIBUTION_START:2, VALUE_SELECTED:3, BUCKET_INDEX_CALCULATED:4, VALUE_TO_BUCKET_START:5,
+  VALUE_TO_BUCKET_COMPLETE:6, DISTRIBUTION_COMPLETE:7, BUCKET_SORT_START:8, KEY_SELECTED:9, LOCAL_COMPARE:10,
+  SHIFT_START:11, SHIFT_COMPLETE:12, KEY_INSERTED:13, BUCKET_SORT_COMPLETE:14, ALL_BUCKETS_SORTED:15,
+  CONCATENATION_START:16, CONCAT_VALUE_START:17, CONCAT_VALUE_COMPLETE:18, CONCATENATION_COMPLETE:19,
+  COPY_BACK_START:20, COPY_BACK_STEP:21, SORT_COMPLETE:22, RESET:23
+};
+const Bus = {
+  subs: [],
+  on(f) { this.subs.push(f); },
+  emit(t, a, b, c) { for (let i = 0; i < this.subs.length; i++) this.subs[i](t, a, b, c); }
+};
+const emit = (t, a, b, c) => Bus.emit(t, a, b, c);
+
+/* =====================================================================
+   1. ALGORITHM LAYER  (owns all real state; generator = one yield per meaningful step)
+   ===================================================================== */
+const PH = { IDLE:0, DIST:1, SORT:2, CONCAT:3, COPY:4, DONE:5 };
+const EL = [];                                     // preallocated element objects (one per input slot)
+for (let i = 0; i < N; i++) EL.push({ v:0, id:i, ox:0, oy:0, taken:false });
+
+const S = {
+  phase: PH.IDLE, array: [], min: 0, max: 0, R: 1, rangesKnown: false,
+  lo: [0,0,0,0,0], hi: [0,0,0,0,0],
+  buckets: [[],[],[],[],[]], output: new Array(N).fill(null), outFrom: new Array(N).fill(-1), outIdx: 0,
+  inIdx: -1, curVal: null, curBucket: -1, calc: { frac: 0, idx: 0 }, placedThis: false,
+  placedTo: new Array(N).fill(-1), placed: 0,
+  selBucket: -1, sorted: [false,false,false,false,false],
+  ins: { active:false, i:0, j:0, key:null, gap:-1, cmp:-1, gt:false },
+  concat: { b:-1, k:-1 }, copyIdx: 0,
+  comparisons: 0, shifts: 0, writes: 0, done: false, stable: true, verified: true
+};
+
+function resetState(arr) {
+  S.array.length = 0;
+  for (let i = 0; i < N; i++) { S.array.push(arr[i]); EL[i].v = arr[i]; EL[i].ox = 0; EL[i].oy = 0; EL[i].taken = false; }
+  S.phase = PH.IDLE; S.min = 0; S.max = 0; S.R = 1; S.rangesKnown = false;
+  for (let b = 0; b < K; b++) { S.buckets[b].length = 0; S.lo[b] = 0; S.hi[b] = 0; S.sorted[b] = false; }
+  S.output.fill(null); S.outFrom.fill(-1); S.outIdx = 0;
+  S.inIdx = -1; S.curVal = null; S.curBucket = -1; S.placedThis = false; S.placedTo.fill(-1); S.placed = 0;
+  S.selBucket = -1;
+  S.ins.active = false; S.ins.i = 0; S.ins.j = 0; S.ins.key = null; S.ins.gap = -1; S.ins.cmp = -1; S.ins.gt = false;
+  S.concat.b = -1; S.concat.k = -1; S.copyIdx = 0;
+  S.comparisons = 0; S.shifts = 0; S.writes = 0; S.done = false; S.stable = true; S.verified = true;
+}
+
+// Bucket index: exactly the formula from the spec.
+function bucketIndex(value, min, max, bucketCount) {
+  return Math.min(bucketCount - 1, Math.floor(((value - min) / (max - min + 1)) * bucketCount));
+}
+
+function* algo() {
+  const arr = S.array;
+
+  // ---- STEP: compute min / max / bucket ranges -------------------------
+  S.min = Math.min(...arr); S.max = Math.max(...arr); S.R = S.max - S.min + 1;
+  for (let b = 0; b < K; b++) {
+    S.lo[b] = S.min + Math.ceil(b * S.R / K);
+    S.hi[b] = S.min + Math.ceil((b + 1) * S.R / K) - 1;
+  }
+  for (let v = S.min; v <= S.max; v++) {           // ranges must agree with the real formula
+    const idx = bucketIndex(v, S.min, S.max, K);
+    if (v < S.lo[idx] || v > S.hi[idx]) console.warn('bucket range mismatch for', v);
+  }
+  S.rangesKnown = true; S.phase = PH.DIST;
+  emit(EV.SORT_START); emit(EV.DISTRIBUTION_START);
+  yield 50;
+
+  // ---- PHASE 1: DISTRIBUTE (input order, no pre-sorting) ---------------
+  for (let i = 0; i < N; i++) {
+    const value = arr[i], el = EL[i];
+    S.inIdx = i; S.curVal = value; S.placedThis = false;
+    const frac = ((value - S.min) / (S.max - S.min + 1)) * K;
+    const idx = bucketIndex(value, S.min, S.max, K);
+    S.calc.frac = frac; S.calc.idx = idx; S.curBucket = idx;
+    emit(EV.VALUE_SELECTED, i); emit(EV.BUCKET_INDEX_CALCULATED, i, idx);
+    yield 34;
+
+    S.buckets[idx].push(el); S.placed++; S.writes++;
+    S.placedTo[i] = idx; S.placedThis = true;
+    emit(EV.VALUE_TO_BUCKET_START, i, idx, S.buckets[idx].length - 1);
+    yield 12;
+  }
+  S.inIdx = -1; S.curVal = null; S.curBucket = -1; S.placedThis = false; S.phase = PH.SORT;
+  emit(EV.DISTRIBUTION_COMPLETE);
+  yield 44;
+
+  // ---- PHASE 2: SORT EACH BUCKET (real insertion sort, one bucket at a time)
+  for (let b = 0; b < K; b++) {
+    const bk = S.buckets[b];
+    S.selBucket = b; S.ins.active = false; S.ins.gap = -1;
+    emit(EV.BUCKET_SORT_START, b, bk.length);
+    yield 34;
+    if (bk.length > 1) {
+      S.ins.active = true;
+      for (let i = 1; i < bk.length; i++) {
+        const key = bk[i]; let j = i - 1;
+        S.ins.i = i; S.ins.j = j; S.ins.key = key; S.ins.gap = i; S.ins.cmp = -1;
+        emit(EV.KEY_SELECTED, b, i);
+        yield 30;
+        while (j >= 0) {
+          S.ins.j = j; S.ins.cmp = j; S.comparisons++;
+          S.ins.gt = bk[j].v > key.v;
+          emit(EV.LOCAL_COMPARE, b, j);
+          yield 30;
+          if (!S.ins.gt) break;
+          bk[j + 1] = bk[j]; S.shifts++; S.writes++; S.ins.gap = j;
+          emit(EV.SHIFT_START, b, j);
+          yield 10;
+          j--;
+        }
+        S.ins.cmp = -1; S.ins.j = j;
+        bk[j + 1] = key; S.writes++; S.ins.gap = -1;
+        emit(EV.KEY_INSERTED, b, j + 1);
+        yield 14;
+      }
+      S.ins.active = false; S.ins.key = null;
+    }
+    S.sorted[b] = true;
+    emit(EV.BUCKET_SORT_COMPLETE, b);
+    yield 30;
+  }
+  S.selBucket = -1;
+  emit(EV.ALL_BUCKETS_SORTED);
+  yield 44;
+
+  // ---- PHASE 3: CONCATENATE buckets low -> high --------------------------
+  S.phase = PH.CONCAT;
+  emit(EV.CONCATENATION_START);
+  yield 50;
+  let oi = 0;
+  for (let b = 0; b < K; b++) {
+    S.selBucket = b;
+    for (let k = 0; k < S.buckets[b].length; k++) {
+      const el = S.buckets[b][k];
+      S.concat.b = b; S.concat.k = k;
+      S.output[oi] = el; S.outFrom[oi] = b; S.outIdx = oi + 1; S.writes++; el.taken = true;
+      emit(EV.CONCAT_VALUE_START, b, k, oi);
+      oi++;
+      yield 8;
+    }
+  }
+  S.selBucket = -1; S.concat.b = -1; S.concat.k = -1;
+  emit(EV.CONCATENATION_COMPLETE);
+  yield 44;
+
+  // ---- COPY BACK -----------------------------------------------------------
+  S.phase = PH.COPY;
+  emit(EV.COPY_BACK_START);
+  yield 40;
+  for (let i = 0; i < N; i++) {
+    arr[i] = S.output[i].v; S.writes++; S.copyIdx = i + 1;
+    emit(EV.COPY_BACK_STEP, i);
+    yield 6;
+  }
+
+  // ---- verification (sortedness and stability) -----------------------------
+  for (let i = 1; i < N; i++) {
+    if (arr[i - 1] > arr[i]) S.verified = false;
+    if (S.output[i - 1].v === S.output[i].v && S.output[i - 1].id > S.output[i].id) S.stable = false;
+  }
+  S.phase = PH.DONE; S.done = true;
+  emit(EV.SORT_COMPLETE);
+  yield 0;
+}
+
+/* =====================================================================
+   CANVAS / PIXEL PRIMITIVES
+   ===================================================================== */
+const view = document.getElementById('view');
+const vctx = view.getContext('2d');
+const off = document.createElement('canvas');
+off.width = W; off.height = H;
+const g = off.getContext('2d');
+g.imageSmoothingEnabled = false;
+let scale = 4;
+
+function R(x, y, w, h, c) { g.fillStyle = c; g.fillRect(x | 0, y | 0, w | 0, h | 0); }
+function pbox(x, y, w, h, b, f) {                   // pixel box with clipped corners
+  R(x + 1, y, w - 2, h, f); R(x, y + 1, w, h - 2, f);
+  R(x + 1, y, w - 2, 1, b); R(x + 1, y + h - 1, w - 2, 1, b);
+  R(x, y + 1, 1, h - 2, b); R(x + w - 1, y + 1, 1, h - 2, b);
+}
+function outline(x, y, w, h, c) {
+  R(x + 1, y, w - 2, 1, c); R(x + 1, y + h - 1, w - 2, 1, c);
+  R(x, y + 1, 1, h - 2, c); R(x + w - 1, y + 1, 1, h - 2, c);
+}
+
+/* 3x5 bitmap font (rows top->bottom, 3 bits each, '.' ':' ',' '!' are 1px wide) */
+const GL = {
+ 'A':'010101111101101','B':'110101110101110','C':'011100100100011','D':'110101101101110','E':'111100110100111',
+ 'F':'111100110100100','G':'011100101101011','H':'101101111101101','I':'111010010010111','J':'001001001101010',
+ 'K':'101101110101101','L':'100100100100111','M':'101111111101101','N':'111101101101101','O':'010101101101010',
+ 'P':'110101110100100','Q':'010101101111011','R':'110101110101101','S':'011100010001110','T':'111010010010010',
+ 'U':'101101101101111','V':'101101101101010','W':'101101111111101','X':'101101010101101','Y':'101101010010010',
+ 'Z':'111001010100111',
+ '0':'111101101101111','1':'010110010010111','2':'110001010100111','3':'110001010001110','4':'101101111001001',
+ '5':'111100110001110','6':'011100111101111','7':'111001010010010','8':'111101111101111','9':'111101111001110',
+ ' ':'000000000000000','.':'000000000000010',':':'000010000010000',',':'000000000010010','!':'010010010000010',
+ '-':'000000111000000','+':'000010111010000','>':'100010001010100','<':'001010100010001','/':'001001010100100',
+ '(':'010100100100010',')':'010001001001010','[':'110100100100110',']':'011001001001011','^':'010101000000000',
+ '=':'000111000111000','?':'110001010000010','%':'101001010100101','_':'000000000000111','*':'000101010101000'
+};
+const NARROW = '.:,!';
+function T(str, x, y, col) {
+  g.fillStyle = col; x |= 0; y |= 0;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i], gl = GL[ch] || GL['?'], nar = NARROW.indexOf(ch) >= 0;
+    for (let r = 0; r < 5; r++) for (let c = 0; c < 3; c++) {
+      if (gl.charCodeAt(r * 3 + c) === 49) {
+        if (nar) { if (c === 1) g.fillRect(x, y + r, 1, 1); } else g.fillRect(x + c, y + r, 1, 1);
+      }
+    }
+    x += (nar ? 1 : 3) + 1;
+  }
+}
+function tw(s) { let w = 0; for (let i = 0; i < s.length; i++) w += (NARROW.indexOf(s[i]) >= 0 ? 1 : 3) + 1; return w > 0 ? w - 1 : 0; }
+
+/* =====================================================================
+   LAYOUT (logical 128x96)
+   ===================================================================== */
+const INY = 8, OUTY = 63, LANE = 62;
+const INX = i => 4 + i * 10;
+const OUTX = i => 4 + i * 10;
+const BX = b => 2 + b * 25;
+const BY = 27, BW = 23, BHT = 35, SLOT0 = 40;
+function slotPitch(b, extra) { return Math.min(7, Math.floor(21 / Math.max(3, S.buckets[b].length, extra || 0))); }
+function slotY(b, k) { return SLOT0 + k * slotPitch(b, k + 1); }
+
+/* =====================================================================
+   3. ANIMATION LAYER (consumes events; never decides algorithm outcomes)
+   ===================================================================== */
+const ease = t => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+let fx = mulberry32(99);
+
+const A = {
+  frame: 0, fl: [], of: [], pt: [], flash: [0,0,0,0,0],
+  hideB: -1, hideK: -1, hideOut: -1, hideIn: -1
+};
+for (let i = 0; i < 6; i++) A.fl.push({ on:false, t:0, dur:1, n:0, px:[0,0,0,0], py:[0,0,0,0], ln:[0,0,0], total:0, type:0, v:0, bi:0, a:0, x:0, y:0 });
+for (let i = 0; i < 24; i++) A.of.push({ on:false, el:null, t:0, dur:1, ox0:0, oy0:0, evt:0, b:0, k:0 });
+for (let i = 0; i < 200; i++) A.pt.push({ on:false, x:0, y:0, vx:0, vy:0, t:0, life:1, c:C.white });
+
+A.clear = function () {
+  for (const f of this.fl) f.on = false;
+  for (const o of this.of) { if (o.on && o.el) { o.el.ox = 0; o.el.oy = 0; } o.on = false; }
+  for (const p of this.pt) p.on = false;
+  this.flash.fill(0); this.hideB = -1; this.hideK = -1; this.hideOut = -1; this.hideIn = -1; this.frame = 0;
+  fx = mulberry32(99);
+};
+A.busy = function () {
+  for (let i = 0; i < this.fl.length; i++) if (this.fl[i].on) return true;
+  for (let i = 0; i < this.of.length; i++) if (this.of[i].on) return true;
+  return false;
+};
+A.anyParts = function () { for (let i = 0; i < this.pt.length; i++) if (this.pt[i].on) return true; return false; };
+A.finishAll = function () { let n = 0; while (this.busy() && n++ < 800) this.update(); };
+
+A.spawn = function (x, y, vx, vy, life, c) {
+  for (let i = 0; i < this.pt.length; i++) {
+    const p = this.pt[i];
+    if (!p.on) { p.on = true; p.x = x; p.y = y; p.vx = vx; p.vy = vy; p.t = 0; p.life = life; p.c = c; return; }
+  }
+};
+A.burst = function (x, y, c, n, sp) {
+  for (let i = 0; i < n; i++) {
+    const a = fx() * 6.2832, s = (0.25 + fx()) * sp;
+    this.spawn(x, y, Math.cos(a) * s, Math.sin(a) * s - 0.15, 12 + ((fx() * 14) | 0), c);
+  }
+};
+A.offSet = function (el, ox0, oy0, dur, evt, b, k) {
+  let o = null;
+  for (let i = 0; i < this.of.length; i++) if (this.of[i].on && this.of[i].el === el) { o = this.of[i]; break; }
+  if (!o) for (let i = 0; i < this.of.length; i++) if (!this.of[i].on) { o = this.of[i]; break; }
+  if (!o) return;
+  o.on = true; o.el = el; o.t = 0; o.dur = dur; o.ox0 = ox0; o.oy0 = oy0; o.evt = evt || 0; o.b = b || 0; o.k = k || 0;
+  el.ox = ox0; el.oy = oy0;
+};
+A.flyBegin = function (type, v, bi, dur) {
+  for (let i = 0; i < this.fl.length; i++) {
+    const f = this.fl[i];
+    if (!f.on) { f.on = true; f.t = 0; f.dur = dur; f.type = type; f.v = v; f.bi = bi; f.a = 0; return f; }
+  }
+  return this.fl[0];
+};
+function flyPrep(f, n) {
+  f.n = n; f.total = 0;
+  for (let i = 0; i < n - 1; i++) { f.ln[i] = Math.abs(f.px[i + 1] - f.px[i]) + Math.abs(f.py[i + 1] - f.py[i]); f.total += f.ln[i]; }
+  f.x = f.px[0]; f.y = f.py[0];
+}
+function flyPos(f) {
+  let d = ease(Math.min(1, f.t / f.dur)) * f.total;
+  for (let i = 0; i < f.n - 1; i++) {
+    if (d <= f.ln[i] || i === f.n - 2) {
+      const r = f.ln[i] ? Math.min(1, d / f.ln[i]) : 1;
+      f.x = f.px[i] + (f.px[i + 1] - f.px[i]) * r; f.y = f.py[i] + (f.py[i + 1] - f.py[i]) * r; return;
+    }
+    d -= f.ln[i];
+  }
+}
+function routeDist(i, b, k, px, py) {
+  px[0] = INX(i) + 4; py[0] = INY + 3;
+  px[1] = px[0];      py[1] = 26;                        // lane just above the buckets
+  px[2] = BX(b) + 11; py[2] = 26;
+  px[3] = px[2];      py[3] = slotY(b, k) + 3;
+}
+
+A.update = function () {
+  for (let i = 0; i < this.fl.length; i++) {
+    const f = this.fl[i];
+    if (!f.on) continue;
+    f.t++; flyPos(f);
+    if ((f.t & 3) === 0) this.spawn(f.x, f.y, 0, 0, 7, f.type === 3 ? C.lime : BC[f.bi]);
+    if (f.t >= f.dur) {
+      f.on = false;
+      const tx = f.px[f.n - 1], ty = f.py[f.n - 1];
+      if (f.type === 1) {
+        this.hideB = -1; this.hideK = -1; this.hideIn = -1;
+        this.burst(tx, ty, BC[f.bi], 7, 0.7); this.flash[f.bi] = 12;
+        emit(EV.VALUE_TO_BUCKET_COMPLETE, f.bi, f.a);
+      } else if (f.type === 2) {
+        this.hideOut = -1; this.burst(tx, ty, BC[f.bi], 6, 0.6);
+        emit(EV.CONCAT_VALUE_COMPLETE, f.bi, f.a);
+      } else {
+        this.hideIn = -1; this.burst(tx, ty, C.lime, 6, 0.6);
+      }
+    }
+  }
+  for (let i = 0; i < this.of.length; i++) {
+    const o = this.of[i];
+    if (!o.on) continue;
+    o.t++;
+    const e = ease(Math.min(1, o.t / o.dur));
+    o.el.ox = o.ox0 * (1 - e); o.el.oy = o.oy0 * (1 - e);
+    if (o.t >= o.dur) {
+      o.on = false; o.el.ox = 0; o.el.oy = 0;
+      if (o.evt) emit(o.evt, o.b, o.k);
+    }
+  }
+  for (let i = 0; i < this.pt.length; i++) {
+    const p = this.pt[i];
+    if (!p.on) continue;
+    p.t++; p.x += p.vx; p.y += p.vy; p.vy += 0.04;
+    if (p.t >= p.life) p.on = false;
+  }
+  for (let b = 0; b < K; b++) if (this.flash[b] > 0) this.flash[b]--;
+};
+
+A.onEvent = function (t, a, b, c) {
+  switch (t) {
+    case EV.RESET: this.clear(); break;
+    case EV.BUCKET_INDEX_CALCULATED: this.flash[b] = 16; break;
+    case EV.VALUE_TO_BUCKET_START: {
+      const f = this.flyBegin(1, EL[a].v, b, 26);
+      routeDist(a, b, c, f.px, f.py); flyPrep(f, 4);
+      f.a = c; this.hideB = b; this.hideK = c; this.hideIn = a;
+      break;
+    }
+    case EV.DISTRIBUTION_COMPLETE: for (let i = 0; i < K; i++) this.flash[i] = 10; break;
+    case EV.BUCKET_SORT_START: this.flash[a] = 18; break;
+    case EV.KEY_SELECTED:
+      this.offSet(S.ins.key, -1, 1, 10);
+      this.burst(BX(a) + 11, slotY(a, b) + 3, C.yellow, 4, 0.5);
+      break;
+    case EV.SHIFT_START: {
+      const bk = S.buckets[a], moved = bk[b + 1], p = slotPitch(a);
+      this.offSet(moved, 0, -p, 12, EV.SHIFT_COMPLETE, a, b);
+      this.offSet(S.ins.key, 0, p, 12);
+      this.burst(BX(a) + 11, slotY(a, b) + 3, C.orange, 3, 0.5);
+      break;
+    }
+    case EV.KEY_INSERTED:
+      this.offSet(S.buckets[a][b], 1, -1, 10);
+      this.burst(BX(a) + 11, slotY(a, b) + 3, C.yellow, 6, 0.6);
+      break;
+    case EV.BUCKET_SORT_COMPLETE:
+      this.burst(BX(a) + 11, 45, C.lime, 12, 0.9); this.burst(BX(a) + 11, 45, BC[a], 8, 0.7); this.flash[a] = 22;
+      break;
+    case EV.ALL_BUCKETS_SORTED: for (let i = 0; i < K; i++) this.burst(BX(i) + 11, 44, C.lime, 4, 0.6); break;
+    case EV.CONCAT_VALUE_START: {
+      const f = this.flyBegin(2, S.output[c].v, a, 22);
+      f.px[0] = BX(a) + 11; f.py[0] = slotY(a, b) + 3;
+      f.px[1] = f.px[0];    f.py[1] = LANE;
+      f.px[2] = OUTX(c) + 4; f.py[2] = LANE;
+      f.px[3] = f.px[2];    f.py[3] = OUTY + 3;
+      flyPrep(f, 4); f.a = c; this.hideOut = c;
+      break;
+    }
+    case EV.COPY_BACK_STEP: {
+      const f = this.flyBegin(3, S.output[a].v, 4, 16);
+      f.px[0] = OUTX(a) + 4; f.py[0] = OUTY + 3; f.px[1] = INX(a) + 4; f.py[1] = INY + 3;
+      flyPrep(f, 2); f.a = a; this.hideIn = a;
+      break;
+    }
+    case EV.SORT_COMPLETE:
+      for (let i = 0; i < K; i++) this.burst(BX(i) + 11, 45, BC[i], 14, 1.1);
+      for (let i = 0; i < 6; i++) this.burst(10 + i * 21, OUTY + 3, C.yellow, 8, 1.1);
+      break;
+  }
+};
+
+/* =====================================================================
+   5. AUDIO LAYER (Web Audio only; reacts to semantic events)
+   ===================================================================== */
+const Snd = {
+  ctx: null, master: null, noiseBuf: null, on: true,
+  init() {
+    if (this.ctx) { if (this.ctx.state === 'suspended') this.ctx.resume(); return; }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    this.ctx = new AC();
+    this.master = this.ctx.createGain(); this.master.gain.value = 0.5; this.master.connect(this.ctx.destination);
+    const len = this.ctx.sampleRate >> 3, buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate), d = buf.getChannelData(0);
+    const r = mulberry32(5); for (let i = 0; i < len; i++) d[i] = r() * 2 - 1;
+    this.noiseBuf = buf;
+    if (this.ctx.state === 'suspended') this.ctx.resume();
+  },
+  tone(f, dur, type, vol, f2, delay) {
+    if (!this.on || !this.ctx) return;
+    const t = this.ctx.currentTime + (delay || 0), o = this.ctx.createOscillator(), gn = this.ctx.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t);
+    if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + dur);
+    gn.gain.setValueAtTime(vol, t); gn.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(gn); gn.connect(this.master); o.start(t); o.stop(t + dur + 0.02);
+  },
+  noise(dur, vol) {
+    if (!this.on || !this.ctx) return;
+    const t = this.ctx.currentTime, s = this.ctx.createBufferSource(), gn = this.ctx.createGain();
+    s.buffer = this.noiseBuf; gn.gain.setValueAtTime(vol, t); gn.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(gn); gn.connect(this.master); s.start(t); s.stop(t + dur + 0.02);
+  },
+  onEvent(t, a, b, c) {
+    switch (t) {
+      case EV.BUCKET_INDEX_CALCULATED: this.tone([523, 587, 659, 784, 880][b], 0.07, 'square', 0.05); break;
+      case EV.VALUE_TO_BUCKET_START: this.tone(440, 0.12, 'triangle', 0.06, 220); break;
+      case EV.VALUE_TO_BUCKET_COMPLETE: this.noise(0.04, 0.05); this.tone(180, 0.06, 'square', 0.04); break;
+      case EV.DISTRIBUTION_COMPLETE: this.tone(523, 0.08, 'square', 0.05); this.tone(784, 0.12, 'square', 0.05, 0, 0.08); break;
+      case EV.BUCKET_SORT_START: this.tone(660, 0.08, 'square', 0.05); break;
+      case EV.KEY_SELECTED: this.tone(740, 0.06, 'triangle', 0.06); break;
+      case EV.LOCAL_COMPARE: this.tone(1200, 0.025, 'square', 0.03); break;
+      case EV.SHIFT_START: this.tone(420, 0.1, 'square', 0.05, 240); break;
+      case EV.KEY_INSERTED: this.tone(880, 0.09, 'triangle', 0.07); break;
+      case EV.BUCKET_SORT_COMPLETE: this.tone(659, 0.09, 'square', 0.05); this.tone(880, 0.14, 'square', 0.05, 0, 0.09); break;
+      case EV.ALL_BUCKETS_SORTED: this.tone(587, 0.08, 'square', 0.05); this.tone(880, 0.16, 'square', 0.05, 0, 0.08); break;
+      case EV.CONCAT_VALUE_START: this.tone(300 + c * 38, 0.08, 'square', 0.05); break;
+      case EV.COPY_BACK_STEP: this.tone(500 + a * 30, 0.05, 'triangle', 0.05); break;
+      case EV.SORT_COMPLETE: {
+        const n = [523, 659, 784, 1047, 784, 1047];
+        for (let i = 0; i < n.length; i++) this.tone(n[i], 0.12, 'square', 0.06, 0, i * 0.11);
+        break;
+      }
+    }
+  }
+};
+
+/* =====================================================================
+   EXPLANATION / HUD TEXT (derived from real events and state)
+   ===================================================================== */
+function wrap(s) {
+  const words = s.toUpperCase().split(' '), lines = ['', ''];
+  let li = 0;
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i], t = lines[li] ? lines[li] + ' ' + w : w;
+    if (t.length <= 31) lines[li] = t;
+    else if (li === 0) { li = 1; lines[1] = w; }
+    else { lines[1] = (lines[1] + '..').slice(-31); break; }
+  }
+  return lines;
+}
+const UI = { ex: wrap('BUCKET SORT: DISTRIBUTE, SORT EACH BUCKET, THEN CONCATENATE.'), page: 0 };
+UI.onEvent = function (t, a, b, c) {
+  let m = null;
+  switch (t) {
+    case EV.RESET: m = 'BUCKET SORT: DISTRIBUTE, SORT EACH BUCKET, THEN CONCATENATE.'; this.page = 0; break;
+    case EV.DISTRIBUTION_START: m = 'MIN ' + S.min + ' MAX ' + S.max + ': ' + S.R + ' POSSIBLE VALUES SPLIT INTO ' + K + ' RANGES.'; break;
+    case EV.BUCKET_INDEX_CALCULATED: m = EL[a].v + ' FALLS IN ' + S.lo[b] + '..' + S.hi[b] + ' SO IT BELONGS TO B' + b + '.'; break;
+    case EV.VALUE_TO_BUCKET_START:
+      m = S.placed === 1 ? 'BUCKETS STORE THE VALUES THEMSELVES, NOT COUNTS.' : EL[a].v + ' APPENDED TO B' + b + ' IN INPUT ORDER.'; break;
+    case EV.DISTRIBUTION_COMPLETE: m = 'DISTRIBUTION COMPLETE. NOW EACH BUCKET IS SORTED ALONE.'; break;
+    case EV.BUCKET_SORT_START:
+      m = b === 0 ? 'B' + a + ' IS EMPTY. NO SORT REQUIRED.' :
+          b === 1 ? 'B' + a + ' HAS ONE ELEMENT. ALREADY SORTED.' :
+                    'B' + a + ' USES INSERTION SORT INSIDE THE BUCKET.'; break;
+    case EV.KEY_SELECTED: {
+      const pre = S.buckets[a].slice(0, b).map(e => e.v).join(' ');
+      m = 'KEY ' + S.ins.key.v + ' LIFTED. SORTED PREFIX: ' + pre; break;
+    }
+    case EV.LOCAL_COMPARE: {
+      const v = S.buckets[a][b].v, k = S.ins.key.v;
+      m = S.ins.gt ? v + ' > ' + k + ': LARGER VALUE MUST SHIFT DOWN.' : v + ' <= ' + k + ': NO SHIFT NEEDED. INSERT KEY.'; break;
+    }
+    case EV.SHIFT_START: m = 'SHIFT ' + S.buckets[a][b + 1].v + ' DOWN TO MAKE A GAP.'; break;
+    case EV.KEY_INSERTED: m = 'INSERT ' + S.buckets[a][b].v + ' INTO THE GAP.'; break;
+    case EV.BUCKET_SORT_COMPLETE: m = 'B' + a + ' SORTED AND LOCKED.'; break;
+    case EV.ALL_BUCKETS_SORTED: m = 'EVERY BUCKET IS NOW SORTED.'; break;
+    case EV.CONCATENATION_START: m = 'LOWER RANGES FIRST: B0>B1>B2>B3>B4.'; break;
+    case EV.CONCAT_VALUE_START: m = 'COPY ' + S.output[c].v + ' FROM B' + a + ' TO OUT[' + c + '].'; break;
+    case EV.CONCATENATION_COMPLETE: m = 'JOINED IN ORDER, SORTED BUCKETS GIVE THE SORTED ARRAY.'; break;
+    case EV.COPY_BACK_START: m = 'NOW COPY THE OUTPUT BACK INTO THE ORIGINAL ARRAY.'; break;
+    case EV.COPY_BACK_STEP: m = 'ARRAY[' + a + '] = OUT[' + a + '] = ' + S.array[a] + '.'; break;
+    case EV.SORT_COMPLETE: m = 'SORTED! BUCKETS AND OUTPUT STAY FOR INSPECTION.'; this.page = 0; break;
+  }
+  if (m) this.ex = wrap(m);
+};
+UI.hud = function () {
+  switch (S.phase) {
+    case PH.IDLE: return ['PRESS START OR STEP', 'N:' + N + ' BUCKETS:' + K + ' SEED:' + shuffleCount];
+    case PH.DIST:
+      if (S.curVal === null)
+        return ['DIST MIN:' + S.min + ' MAX:' + S.max, 'K:' + K + ' PLACED:' + S.placed + '/' + N];
+      return ['DIST V:' + S.curVal + ' B' + S.curBucket + ' ' + S.lo[S.curBucket] + '..' + S.hi[S.curBucket] + ' PL:' + S.placed + '/' + N,
+              '(' + S.curVal + '-' + S.min + ')/' + S.R + '*' + K + '=' + S.calc.frac.toFixed(1) + ' B' + S.calc.idx];
+    case PH.SORT:
+      if (S.ins.active && S.ins.key) {
+        const cv = S.ins.cmp >= 0 ? S.buckets[S.selBucket][S.ins.cmp].v : '-';
+        return ['SORT B' + S.selBucket + ' KEY:' + S.ins.key.v + ' VS:' + cv,
+                'I:' + S.ins.i + ' J:' + S.ins.j + ' CMP:' + S.comparisons + ' SHIFTS:' + S.shifts];
+      }
+      return ['SORT B' + (S.selBucket < 0 ? '-' : S.selBucket) + ' SIZE:' + (S.selBucket < 0 ? '-' : S.buckets[S.selBucket].length),
+              'CMP:' + S.comparisons + ' SHIFTS:' + S.shifts + ' WR:' + S.writes];
+    case PH.CONCAT:
+      return ['CONCAT B:' + (S.concat.b < 0 ? '-' : S.concat.b) + ' OUT IDX:' + Math.max(0, S.outIdx - 1), 'OUT:' + S.outIdx + '/' + N + ' WRITES:' + S.writes];
+    case PH.COPY:
+      return ['COPY BACK ' + S.copyIdx + '/' + N, 'ARRAY[I]=OUT[I] WRITES:' + S.writes];
+  }
+  return ['', ''];
+};
+UI.infoPage = function () {
+  switch (this.page) {
+    case 0: return [(S.verified ? 'SORTED! ' : 'ERROR! ') + 'CMP:' + S.comparisons + ' SHIFT:' + S.shifts + ' WR:' + S.writes,
+                    'AVG O(N+K)   WORST O(N^2)',
+                    'SPACE O(N+K)  IN-PLACE: NO',
+                    'STABLE: ' + (S.stable ? 'YES' : 'NO') + '  WORST=1 BIG BUCKET'];
+    case 1: return ['EXPECTED O(N+K) ASSUMES EVEN', 'SPREAD: SMALL BUCKETS MAKE', 'INSERTION SORT CHEAP. IF MANY', 'VALUES SHARE ONE BUCKET: N^2.'];
+    default: return ['COUNTING SORT: COUNT EACH KEY.', 'BUCKET SORT: GROUP VALUES BY', 'RANGE. BUCKETS HOLD REAL', 'VALUES. NO FREQUENCY TABLE.'];
+  }
+};
+
+/* =====================================================================
+   4. RENDERING LAYER (reads state, never mutates algorithm state)
+   ===================================================================== */
+function drawTitle() {
+  R(0, 0, W, 7, C.bg2);
+  T('BUCKET SORT', 3, 2, C.black); T('BUCKET SORT', 2, 1, C.white);
+  const act = S.phase === PH.DIST ? 0 : S.phase === PH.SORT ? 1 : (S.phase === PH.CONCAT || S.phase === PH.COPY) ? 2 : S.phase === PH.DONE ? 3 : -1;
+  const tabs = [['DIST', 48, 19], ['SORT', 72, 19], ['CONCAT', 96, 27]];
+  for (let i = 0; i < 3; i++) {
+    const nm = tabs[i][0], x = tabs[i][1], w = tabs[i][2];
+    const fill = i < act ? C.green2 : i === act ? C.yellow : C.bg1;
+    const tc = i === act ? C.bg0 : i < act ? C.light : C.dim;
+    pbox(x, 0, w, 7, i < act ? C.lime : i === act ? C.white : C.line, fill);
+    T(nm, x + 2, 1, tc);
+    if (i < 2) T('>', x + w + 2, 1, C.light);
+  }
+}
+
+function cellText(v, x, y, c) { const s = String(v); T(s, x + 1 + ((7 - tw(s)) >> 1), y + 1, c); }
+
+function drawInput() {
+  for (let i = 0; i < N; i++) {
+    const x = INX(i), y = INY;
+    let border = C.line, fill = C.bg2, tc = C.light, v = S.array[i], show = true, under = -1;
+    if (S.phase === PH.DIST || S.phase === PH.SORT || S.phase === PH.CONCAT || S.phase === PH.COPY || S.phase === PH.DONE) {
+      if (S.phase === PH.DIST && i === S.inIdx && !S.placedThis) {
+        border = (A.frame >> 3) & 1 ? C.white : C.yellow; fill = C.blue2; tc = C.white;
+      } else if (S.placedTo[i] >= 0) {
+        border = C.bg2; fill = C.bg0; tc = C.dim; under = S.placedTo[i];
+      }
+      if (S.phase >= PH.COPY && i < S.copyIdx) { border = C.lime; fill = C.green2; tc = C.white; under = -1; }
+    }
+    if (A.hideIn === i) show = false;
+    pbox(x, y, 9, 7, show ? border : C.bg2, show ? fill : C.bg0);
+    if (show) cellText(v, x, y, tc);
+    if (show && under >= 0) R(x + 1, y + 6, 7, 1, BC[under]);
+  }
+}
+
+function drawBar() {
+  const active = (S.phase === PH.DIST && S.curVal !== null) ? S.curBucket : (S.selBucket >= 0 ? S.selBucket : -1);
+  for (let b = 0; b < K; b++) R(4 + b * 24, 16, 23, 3, b === active ? BC[b] : BD[b]);
+  const mn = S.rangesKnown ? String(S.min) : '?', mx = S.rangesKnown ? String(S.max) : '?';
+  T('MIN ' + mn, 2, 21, C.mid);
+  const ms = 'MAX ' + mx; T(ms, W - 2 - tw(ms), 21, C.mid);
+  if (S.phase === PH.DIST && S.curVal !== null) {
+    const mxp = Math.max(5, Math.min(123, 4 + Math.floor((S.curVal - S.min + 0.5) / S.R * 120)));
+    R(mxp, 19, 1, 1, C.yellow); R(mxp - 1, 20, 3, 1, C.yellow);
+    const s = String(S.curVal), lw = tw(s);
+    let lx = mxp - (lw >> 1); lx = Math.max(1, Math.min(W - 1 - lw, lx));
+    R(lx - 1, 21, lw + 2, 5, C.bg0); T(s, lx, 21, C.yellow);
+  }
+}
+
+function item(x, y, w, v, fill, edge, tc) {
+  R(x, y, w, 1, edge); R(x, y + 1, w, 5, fill); R(x, y, 1, 6, edge); R(x + w - 1, y, 1, 6, edge);
+  const s = String(v); T(s, x + ((w - tw(s)) >> 1), y + 1, tc);
+}
+
+function drawBucket(b) {
+  const x = BX(b), y = BY, w = BW, h = BHT;
+  const distSel = S.phase === PH.DIST && S.curBucket === b && S.curVal !== null;
+  const sel = S.selBucket === b || distSel;
+  const locked = S.sorted[b];
+  const fc = locked ? C.lime : sel ? (((A.frame >> 3) & 1) ? C.white : C.yellow) : C.line;
+  if (sel || A.flash[b] > 0) outline(x - 1, y - 1, w + 2, h + 2, A.flash[b] > 0 ? BC[b] : BD[b]);
+  pbox(x, y, w, h, fc, C.bg0);
+  R(x + 1, y + 1, w - 2, 12, BD[b]);
+  T('B' + b, x + 3, y + 2, C.white);
+  const vis = S.buckets[b].length - (A.hideB === b ? 1 : 0);
+  const sz = 'N=' + vis; T(sz, x + w - 2 - tw(sz), y + 2, BC[b]);
+  const rg = S.rangesKnown ? S.lo[b] + '..' + S.hi[b] : '--';
+  T(rg, x + 1 + ((w - 2 - tw(rg)) >> 1), y + 8, C.light);
+  const bk = S.buckets[b], p = slotPitch(b);
+  for (let k = 0; k < Math.max(3, bk.length); k++) R(x + 1, SLOT0 + k * p, w - 2, p - 1, C.bg1);
+  for (let k = 0; k < bk.length; k++) {
+    if (A.hideB === b && A.hideK === k) continue;
+    if (S.ins.active && S.selBucket === b && S.ins.gap === k) continue;
+    const el = bk[k], sy = slotY(b, k) + Math.round(el.oy), sx = x + 1 + Math.round(el.ox);
+    let fill = BD[b], edge = BC[b], tc = C.white;
+    if (locked) { fill = C.green2; edge = C.lime; }
+    if (S.ins.active && S.selBucket === b) {
+      if (k <= S.ins.i) { fill = C.bg2; edge = C.teal; }
+      if (k === S.ins.cmp) { fill = S.ins.gt ? C.red2 : C.green2; edge = S.ins.gt ? C.red : C.lime; }
+    }
+    if (S.phase === PH.CONCAT && S.concat.b === b && S.concat.k === k) { edge = C.white; fill = C.green; }
+    item(sx, sy, 21, el.v, fill, edge, tc);
+  }
+  if (S.ins.active && S.selBucket === b && S.ins.gap >= 0 && S.ins.key) {       // lifted key
+    const el = S.ins.key, px = x + 2 + Math.round(el.ox), py = slotY(b, S.ins.gap) - 1 + Math.round(el.oy);
+    R(px + 1, py + 2, 21, 6, C.black);
+    item(px, py, 21, el.v, C.yellow, C.white, C.bg0);
+  }
+}
+
+function drawOutput() {
+  for (let i = 0; i < N; i++) {
+    const x = OUTX(i), el = S.output[i];
+    if (!el || A.hideOut === i) { pbox(x, OUTY, 9, 7, C.bg2, C.bg0); continue; }
+    const fin = S.phase >= PH.COPY;
+    pbox(x, OUTY, 9, 7, fin ? C.lime : BC[S.outFrom[i]], fin ? C.green2 : BD[S.outFrom[i]]);
+    cellText(el.v, x, OUTY, C.white);
+  }
+}
+
+function drawPanel() {
+  R(0, 71, W, 25, C.bg1); R(0, 71, W, 1, C.line);
+  if (S.phase === PH.DONE) {
+    const p = UI.infoPage();
+    T(p[0], 2, 73, C.yellow); T(p[1], 2, 79, C.cyan); T(p[2], 2, 85, C.light); T(p[3], 2, 91, C.white);
+    return;
+  }
+  const h = UI.hud();
+  T(h[0], 2, 73, C.cyan); T(h[1], 2, 79, C.light);
+  T(UI.ex[0], 2, 85, C.white); T(UI.ex[1], 2, 91, C.white);
+}
+
+const RX = [0,0,0,0], RY = [0,0,0,0];
+function drawRoute() {
+  if (!(S.phase === PH.DIST && S.curVal !== null && !S.placedThis && S.curBucket >= 0)) return;
+  routeDist(S.inIdx, S.curBucket, S.buckets[S.curBucket].length, RX, RY);
+  g.fillStyle = C.yellow;
+  for (let s = 0; s < 3; s++) {
+    const x0 = RX[s], y0 = RY[s], x1 = RX[s + 1], y1 = RY[s + 1];
+    const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0));
+    for (let i = 0; i <= n; i += 2) {
+      const t = n ? i / n : 0;
+      g.fillRect(Math.round(x0 + (x1 - x0) * t), Math.round(y0 + (y1 - y0) * t), 1, 1);
+    }
+  }
+  const ax = RX[3], ay = RY[3] - 3;                        // arrow head into the slot
+  R(ax - 2, ay - 2, 5, 1, C.yellow); R(ax - 1, ay - 1, 3, 1, C.yellow); R(ax, ay, 1, 1, C.yellow);
+}
+
+function drawFlyers() {
+  for (let i = 0; i < A.fl.length; i++) {
+    const f = A.fl[i];
+    if (!f.on) continue;
+    const x = Math.round(f.x) - 5, y = Math.round(f.y) - 3;
+    R(x + 1, y + 1, 11, 7, C.black);
+    pbox(x, y, 11, 7, f.type === 3 ? C.lime : BC[f.bi], f.type === 3 ? C.green2 : BD[f.bi]);
+    T(String(f.v), x + 2, y + 1, C.white);
+  }
+}
+function drawParticles() {
+  for (let i = 0; i < A.pt.length; i++) {
+    const p = A.pt[i];
+    if (p.on) R(Math.round(p.x), Math.round(p.y), 1, 1, p.c);
+  }
+}
+
+function render() {
+  R(0, 0, W, H, C.bg0);
+  drawTitle(); drawInput(); drawBar();
+  for (let b = 0; b < K; b++) drawBucket(b);
+  drawOutput(); drawRoute(); drawPanel(); drawFlyers(); drawParticles();
+  vctx.imageSmoothingEnabled = false;
+  vctx.drawImage(off, 0, 0, W * scale, H * scale);
+}
+
+/* =====================================================================
+   DRIVER / CONTROLS
+   ===================================================================== */
+Bus.on((t, a, b, c) => A.onEvent(t, a, b, c));
+Bus.on((t, a, b, c) => Snd.onEvent(t, a, b, c));
+Bus.on((t, a, b, c) => UI.onEvent(t, a, b, c));
+
+let gen = null, cooldown = 0, playing = false, stepFlag = false, speed = 1;
+
+function loadArray(arr) {
+  gen = null; cooldown = 0; playing = false; stepFlag = false;
+  resetState(arr);
+  emit(EV.RESET);
+  refreshButtons();
+}
+function advance() {
+  if (!gen) gen = algo();
+  const r = gen.next();
+  if (r.done) { cooldown = 0; return; }
+  cooldown = r.value | 0;
+}
+function tick() {
+  const run = playing || stepFlag || S.done;
+  if (!run) return;
+  if (S.done && !A.busy() && !A.anyParts()) { playing = false; stepFlag = false; return; }
+  A.frame++; A.update();
+  if (S.done) { if (playing || stepFlag) { playing = false; stepFlag = false; refreshButtons(); } return; }
+  if (A.busy()) return;
+  if (cooldown > 0) { cooldown--; return; }
+  if (playing) { advance(); if (S.done) refreshButtons(); }
+  else stepFlag = false;
+}
+
+const $ = id => document.getElementById(id);
+function refreshButtons() {
+  $('bInfo').disabled = !S.done;
+  $('bInfo').textContent = S.done ? 'Info ' + (UI.page + 1) + '/3' : 'Info';
+  $('bSound').textContent = 'Sound: ' + (Snd.on ? 'on' : 'off');
+  $('bSpeed').textContent = 'Speed ' + speed + 'x';
+}
+function doStart() {
+  Snd.init();
+  if (S.done) loadArray(curInput);
+  playing = true; stepFlag = false;
+}
+function doPause() { playing = false; stepFlag = false; }
+function doStep() {
+  Snd.init();
+  if (S.done) return;
+  playing = false; A.finishAll(); cooldown = 0;
+  advance(); stepFlag = true;
+  if (S.done) refreshButtons();
+}
+function doReset() { shuffleCount = 0; curInput = permutation(0); loadArray(curInput); }
+function doShuffle() { shuffleCount++; curInput = permutation(shuffleCount); loadArray(curInput); }
+
+$('bStart').onclick = doStart;
+$('bPause').onclick = doPause;
+$('bStep').onclick = doStep;
+$('bReset').onclick = doReset;
+$('bShuffle').onclick = doShuffle;
+$('bSound').onclick = () => { Snd.init(); Snd.on = !Snd.on; refreshButtons(); };
+$('bSpeed').onclick = () => { speed = speed === 1 ? 2 : speed === 2 ? 4 : 1; refreshButtons(); };
+$('bInfo').onclick = () => { if (S.done) { UI.page = (UI.page + 1) % 3; refreshButtons(); } };
+window.addEventListener('keydown', e => {
+  if (e.key === ' ') { e.preventDefault(); playing ? doPause() : doStart(); }
+  else if (e.key === 'ArrowRight' || e.key === 'n') doStep();
+  else if (e.key === 'r') doReset();
+});
+
+function fit() {
+  const ch = $('controls').offsetHeight;
+  const aw = window.innerWidth - 16, ah = window.innerHeight - ch - 36;
+  scale = Math.max(1, Math.floor(Math.min(aw / W, ah / H)));
+  view.width = W * scale; view.height = H * scale;
+  vctx.imageSmoothingEnabled = false;
+}
+window.addEventListener('resize', fit);
+
+let last = 0, acc = 0;
+function frame(ts) {
+  if (!last) last = ts;
+  acc += Math.min(100, ts - last); last = ts;
+  while (acc >= 1000 / 60) { acc -= 1000 / 60; for (let s = 0; s < speed; s++) tick(); }
+  render();
+  requestAnimationFrame(frame);
+}
+
+loadArray(curInput);
+fit();
+requestAnimationFrame(frame);
+
+if (typeof window !== 'undefined') window.__BS = { S, EL, algo, EV, Bus, resetState, permutation, INITIAL, N, K };
+})();
+</script>
+</body>
+</html>

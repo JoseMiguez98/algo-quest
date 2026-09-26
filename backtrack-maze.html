@@ -1,0 +1,1099 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Backtracking Maze Solver</title>
+<style>
+  html, body { height: 100%; margin: 0; background: #0c0b16; overflow: hidden; color-scheme: dark; }
+  #screen {
+    position: fixed; inset: 0; width: 100%; height: 100%;
+    display: block; background: #0c0b16; cursor: pointer;
+    image-rendering: pixelated; image-rendering: crisp-edges;
+  }
+  #err {
+    position: fixed; left: 16px; right: 16px; bottom: 16px;
+    font: 13px/1.4 ui-monospace, Menlo, Consolas, monospace;
+    color: #fff3c4; background: #6e1a2c; border: 2px solid #e2433f;
+    padding: 10px 12px; white-space: pre-wrap;
+  }
+</style>
+</head>
+<body>
+<canvas id="screen" aria-label="Pixel-art replay of a depth-first backtracking search solving an 8 by 8 maze. Tap the speaker icon or press M for 8-bit sound; tap elsewhere or press space to change speed."></canvas>
+<div id="err" hidden></div>
+<script>
+'use strict';
+/* =====================================================================
+   1. CONSTANTS / PALETTE
+   ===================================================================== */
+const LW = 128, LH = 96;               // logical resolution
+const TICK_MS = 1000 / 60;             // fixed 60 Hz simulation step
+const CELL = 8;                        // 8x8 logical pixels per maze cell
+const MX = 4, MY = 12;                 // maze origin on the logical canvas
+
+// Fixed 24-color palette. Every visible pixel comes from here.
+const PAL = [
+  '#0c0b16', // 0  void
+  '#171628', // 1  panel
+  '#221f3b', // 2  floor (unexplored)
+  '#2f2b52', // 3  floor dot / rules
+  '#3b3566', // 4  wall shade
+  '#574f8f', // 5  wall mid
+  '#7d74b8', // 6  wall light
+  '#243e6b', // 7  visited dark
+  '#3d68a3', // 8  visited blue
+  '#b0512a', // 9  active path dark
+  '#f0913a', // 10 active path warm
+  '#ffd84a', // 11 current / evaluating
+  '#fff3c4', // 12 cream
+  '#ffffff', // 13 white
+  '#6e1a2c', // 14 dead-end dark
+  '#e2433f', // 15 dead-end red
+  '#3f2466', // 16 backtracked dark
+  '#9a5ad6', // 17 backtracked purple
+  '#16715a', // 18 solution dark
+  '#3fe6ad', // 19 solution bright
+  '#b6fff0', // 20 solution light
+  '#6b6794', // 21 muted text
+  '#c2bde6', // 22 text
+  '#ff7a59', // 23 ember
+];
+
+// Event types produced by the solver.
+const E_TRY = 0, E_INVALID = 1, E_VALID = 2, E_ENTER = 3, E_MARK = 4,
+      E_GOAL = 5, E_DEAD = 6, E_UNMARK = 7, E_BACKTRACK = 8, E_COMPLETE = 9;
+const EVENT_NAME  = ['TRY', 'INVALID', 'VALID', 'ENTER', 'MARK PATH', 'GOAL FOUND', 'DEAD END', 'UNMARK', 'BACKTRACK', 'COMPLETE'];
+const EVENT_COLOR = [22, 15, 19, 11, 10, 19, 15, 17, 17, 19];
+const STATE_NAME  = ['EXPLORING', 'CHECKING', 'CHOOSING', 'RECURSING', 'RECURSING', 'GOAL FOUND', 'DEAD END', 'BACKTRACKING', 'BACKTRACKING', 'COMPLETE'];
+// Playback duration of each event type, in 60 Hz ticks (at 1x speed).
+const DUR = new Uint8Array([6, 9, 6, 12, 5, 60, 26, 9, 12, 12]);
+
+// Candidate directions, tried in this fixed order.
+const DIR_R = new Int8Array([0, 1, 0, -1]);
+const DIR_C = new Int8Array([1, 0, -1, 0]);
+const DIR_NAME = ['RIGHT', 'DOWN', 'LEFT', 'UP'];
+
+// Reasons a candidate cell is rejected.
+const R_OK = 0, R_OOB = 1, R_WALL = 2, R_ONPATH = 3, R_EXPLORED = 4;
+const REASON_NAME = ['', 'OFF GRID', 'WALL', 'ON PATH', 'EXPLORED'];
+
+// Lifecycle phases.
+const PH_INTRO = 0, PH_SOLVING = 1, PH_SOLUTION = 2, PH_RESET = 3;
+const INTRO_T = 70, SOLUTION_T = 330, RESET_T = 48;
+
+/* =====================================================================
+   2. MAZE DEFINITION  (deterministic, 8x8, '#' = wall)
+   ===================================================================== */
+const MAZE_SRC = [
+  '.##.#.#.',
+  '..#...#.',
+  '........',
+  '##...#..',
+  '##....#.',
+  '...####.',
+  '#....#.#',
+  '..##....',
+];
+const W = 8, H = 8, N = W * H;
+const WALL = new Uint8Array(N);
+for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) WALL[r * W + c] = MAZE_SRC[r][c] === '#' ? 1 : 0;
+const START = 0;             // (0,0)
+const GOAL = N - 1;          // (7,7)
+
+/* ---------- assertions: fail loudly, never animate a wrong state ---------- */
+let fatal = null;
+function assert(cond, msg) { if (!cond) throw new Error(msg); }
+
+/* =====================================================================
+   3. BACKTRACKING SOLVER
+   Explicit solver state. The solver runs to completion before playback.
+   ===================================================================== */
+const S = { cur: -1, depth: 0, calls: 0, backtracks: 0, pathLen: 0, tryDir: -1, lastEvent: -1 };
+const S_visited = new Uint8Array(N);   // cells ever marked
+const S_onPath  = new Uint8Array(N);   // cells on the current recursion path
+const S_failed  = new Uint8Array(N);   // 1 = leaf dead end, 2 = unwound after children failed
+const S_path    = new Int16Array(N);   // the recursion path as a stack of cell ids
+const SOL       = new Int16Array(N);   // final solution path
+let SOL_LEN = 0;
+
+/* =====================================================================
+   4. EVENT GENERATION
+   Every event snapshots the solver counters so any frame can be
+   reconstructed exactly from the stream.
+   ===================================================================== */
+const MAX_EV = 4096;
+const EV_T     = new Uint8Array(MAX_EV);
+const EV_R     = new Int8Array(MAX_EV);    // row of the cell the event is about (may be off-grid for TRY)
+const EV_C     = new Int8Array(MAX_EV);
+const EV_D     = new Int8Array(MAX_EV);    // direction, or -1
+const EV_A     = new Uint8Array(MAX_EV);   // aux: rejection reason / leaf flag
+const EV_DEP   = new Uint8Array(MAX_EV);   // recursion depth
+const EV_CALLS = new Uint16Array(MAX_EV);
+const EV_BT    = new Uint16Array(MAX_EV);
+const EV_PL    = new Uint8Array(MAX_EV);   // path length after the event
+let EV_N = 0;
+let firstChecksum = -1;
+
+function emit(t, r, c, d, a) {
+  assert(EV_N < MAX_EV, 'event buffer overflow');
+  EV_T[EV_N] = t; EV_R[EV_N] = r; EV_C[EV_N] = c; EV_D[EV_N] = d; EV_A[EV_N] = a;
+  EV_DEP[EV_N] = S.depth; EV_CALLS[EV_N] = S.calls; EV_BT[EV_N] = S.backtracks; EV_PL[EV_N] = S.pathLen;
+  S.lastEvent = t;
+  EV_N++;
+}
+
+// Validity test for a candidate cell (steps 2 and 3: valid? already visited?).
+function check(r, c) {
+  if (r < 0 || c < 0 || r >= H || c >= W) return R_OOB;
+  const i = r * W + c;
+  if (WALL[i]) return R_WALL;
+  if (S_onPath[i]) return R_ONPATH;      // would create a cycle in the current path
+  if (S_visited[i]) return R_EXPLORED;   // already explored and failed earlier
+  return R_OK;
+}
+
+function assertPathInvariants() {
+  // No duplicate cells on the path; current position is the last element;
+  // consecutive cells are grid neighbours; no wall on the path.
+  for (let k = 0; k < S.pathLen; k++) {
+    const a = S_path[k];
+    assert(!WALL[a], 'wall on path');
+    for (let j = k + 1; j < S.pathLen; j++) assert(S_path[j] !== a, 'duplicate cell on path');
+    if (k > 0) assert(adjacent(S_path[k - 1], a), 'path is not connected');
+  }
+  assert(S.pathLen === 0 || S_path[S.pathLen - 1] === S.cur, 'current cell is not the path head');
+}
+
+function adjacent(a, b) {
+  const ar = (a / W) | 0, ac = a % W, br = (b / W) | 0, bc = b % W;
+  return Math.abs(ar - br) + Math.abs(ac - bc) === 1;
+}
+
+/* The recursive backtracker.
+   Caller guarantees (r,c) passed check(); we re-assert it anyway.
+   Returns true once the goal is reached; the path is left intact. */
+function solve(r, c, depth) {
+  const i = r * W + c;
+  assert(check(r, c) === R_OK, 'solver entered an invalid cell ' + r + ',' + c);
+
+  // 1. choose the cell: open a new stack frame
+  S.calls++; S.depth = depth; S.cur = i;
+  emit(E_ENTER, r, c, -1, 0);
+
+  // 4. mark the cell as part of the current path
+  S_visited[i] = 1; S_onPath[i] = 1; S_path[S.pathLen++] = i;
+  assertPathInvariants();
+  emit(E_MARK, r, c, -1, 0);
+
+  // 11. success
+  if (i === GOAL) { emit(E_GOAL, r, c, -1, 0); return true; }
+
+  // 5. try each candidate direction in a fixed order
+  let recursed = 0;
+  for (let d = 0; d < 4; d++) {
+    const nr = r + DIR_R[d], nc = c + DIR_C[d];
+    S.tryDir = d;
+    emit(E_TRY, nr, nc, d, 0);
+    const why = check(nr, nc);
+    if (why !== R_OK) { emit(E_INVALID, nr, nc, d, why); continue; }   // 9. try next candidate
+    emit(E_VALID, nr, nc, d, 0);
+    recursed = 1;
+    // 6. recurse into the candidate
+    if (solve(nr, nc, depth + 1)) return true;
+    // 7. the child failed and already undid itself: we are this frame again
+    S.cur = i; S.depth = depth;
+    assert(S_path[S.pathLen - 1] === i, 'returned to a frame that is not the path head');
+  }
+
+  // 10. every candidate exhausted: this frame fails
+  emit(E_DEAD, r, c, -1, recursed ? 0 : 1);
+  S_failed[i] = recursed ? 2 : 1;
+
+  // 8. undo: remove the cell from the active path
+  S.pathLen--; S_onPath[i] = 0;
+  emit(E_UNMARK, r, c, -1, 0);
+
+  // return to the previous stack frame
+  S.backtracks++;
+  const parent = S.pathLen > 0 ? S_path[S.pathLen - 1] : -1;
+  S.depth = depth - 1; S.cur = parent;
+  if (parent >= 0) emit(E_BACKTRACK, (parent / W) | 0, parent % W, -1, 0);
+  else emit(E_BACKTRACK, -1, -1, -1, 0);
+  return false;
+}
+
+function runSolver() {
+  S.cur = -1; S.depth = 0; S.calls = 0; S.backtracks = 0; S.pathLen = 0; S.tryDir = -1; S.lastEvent = -1;
+  S_visited.fill(0); S_onPath.fill(0); S_failed.fill(0); S_path.fill(0);
+  EV_N = 0;
+
+  assert(check((START / W) | 0, START % W) === R_OK, 'start cell is blocked');
+  const ok = solve((START / W) | 0, START % W, 0);
+  emit(E_COMPLETE, (GOAL / W) | 0, GOAL % W, -1, 0);
+  assert(ok, 'maze has no solution');
+
+  // Solution = the path left on the stack when the goal was found.
+  SOL_LEN = S.pathLen;
+  for (let k = 0; k < SOL_LEN; k++) SOL[k] = S_path[k];
+  assert(SOL[0] === START, 'solution does not begin at start');
+  assert(SOL[SOL_LEN - 1] === GOAL, 'solution does not reach the goal');
+  for (let k = 1; k < SOL_LEN; k++) assert(adjacent(SOL[k - 1], SOL[k]), 'solution cells not connected');
+  assert(S.backtracks >= 3, 'maze too easy: fewer than 3 backtracks');
+
+  // Determinism: every regeneration must produce the identical stream.
+  let h = 2166136261 >>> 0;
+  for (let k = 0; k < EV_N; k++) {
+    h = Math.imul(h ^ EV_T[k], 16777619) >>> 0;
+    h = Math.imul(h ^ (EV_R[k] & 255), 16777619) >>> 0;
+    h = Math.imul(h ^ (EV_C[k] & 255), 16777619) >>> 0;
+    h = Math.imul(h ^ EV_A[k], 16777619) >>> 0;
+  }
+  if (firstChecksum < 0) firstChecksum = h;
+  else assert(h === firstChecksum, 'solver produced a different event stream');
+
+  buildTimeline();
+}
+
+/* =====================================================================
+   5. ANIMATION STATE
+   Rebuilt purely by applying events in order. Never decides anything.
+   ===================================================================== */
+const A = {
+  phase: PH_INTRO, phaseT: 0, tick: 0,
+  evIdx: -1, evElapsed: 0, speed: 1,
+  event: -1, depth: 0, calls: 0, backtracks: 0,
+  cur: START, moveFrom: START, moveTo: START, moving: 0,
+  tryActive: 0, tryR: 0, tryC: 0, tryDir: -1, tryStatus: 0, reason: 0,
+  leaf: 0, pathLen: 0, popTimer: 0, popDepth: 0, popCell: 0,
+};
+const A_visited = new Uint8Array(N);
+const A_onPath  = new Uint8Array(N);
+const A_failed  = new Uint8Array(N);
+const A_path    = new Int16Array(N);
+const A_flash   = new Uint8Array(N);   // flash timer per cell
+const A_flashK  = new Uint8Array(N);   // 1 = dead-end flash, 2 = undo flash
+
+function resetAnim() {
+  A_visited.fill(0); A_onPath.fill(0); A_failed.fill(0); A_path.fill(0); A_flash.fill(0); A_flashK.fill(0);
+  A.evIdx = -1; A.evElapsed = 0; A.event = -1; A.depth = 0; A.calls = 0; A.backtracks = 0;
+  A.cur = START; A.moveFrom = START; A.moveTo = START; A.moving = 0;
+  A.tryActive = 0; A.tryDir = -1; A.tryStatus = 0; A.reason = 0; A.leaf = 0;
+  A.pathLen = 0; A.popTimer = 0;
+  rngState = 1;
+  resetParticles();
+}
+
+// Apply one solver event to the animation state. Cross-checks replay
+// against the recorded solver snapshot: the algorithm is authoritative.
+function applyEvent(i) {
+  const t = EV_T[i], r = EV_R[i], c = EV_C[i], d = EV_D[i], aux = EV_A[i];
+  const cell = r * W + c;
+  A.event = t; A.depth = EV_DEP[i]; A.calls = EV_CALLS[i]; A.backtracks = EV_BT[i];
+  A.moving = 0;
+
+  switch (t) {
+    case E_TRY:
+      A.tryActive = 1; A.tryR = r; A.tryC = c; A.tryDir = d; A.tryStatus = 0;
+      assert(A.pathLen > 0 && A_path[A.pathLen - 1] === A.cur, 'TRY from a cell that is not the path head');
+      break;
+    case E_INVALID:
+      assert(A.tryActive && A.tryR === r && A.tryC === c, 'INVALID does not match the tested candidate');
+      A.tryStatus = 2; A.reason = aux;
+      burstAt(cellCX(c, true), cellCY(r, true), 3, RAMP_RED, 0.5, 0);
+      break;
+    case E_VALID:
+      assert(r >= 0 && c >= 0 && r < H && c < W && !WALL[cell] && !A_visited[cell], 'VALID on a blocked cell');
+      A.tryStatus = 1;
+      break;
+    case E_ENTER:
+      assert(r >= 0 && c >= 0 && r < H && c < W, 'entered an out-of-bounds cell');
+      assert(!WALL[cell], 'entered a wall');
+      assert(!A_onPath[cell] && !A_visited[cell], 'entered an already visited cell');
+      if (A.pathLen > 0) assert(adjacent(A_path[A.pathLen - 1], cell), 'entered a non-adjacent cell');
+      else assert(cell === START, 'first entered cell is not START');
+      A.moveFrom = A.pathLen > 0 ? A_path[A.pathLen - 1] : cell;
+      A.moveTo = cell; A.cur = cell; A.moving = 1; A.tryActive = 0;
+      A.popTimer = 34; A.popDepth = EV_DEP[i]; A.popCell = cell;
+      break;
+    case E_MARK:
+      assert(A.cur === cell, 'MARK on a cell that is not current');
+      A_path[A.pathLen++] = cell; A_onPath[cell] = 1; A_visited[cell] = 1;
+      burstAt(cellCX(c, false), cellCY(r, false), 5, RAMP_SPARK, 0.6, 0);
+      break;
+    case E_GOAL:
+      assert(cell === GOAL && A_path[A.pathLen - 1] === GOAL, 'GOAL event away from the goal');
+      burstAt(cellCX(c, false), cellCY(r, false), 36, RAMP_GOAL, 1.3, 1);
+      break;
+    case E_DEAD:
+      assert(A_path[A.pathLen - 1] === cell, 'DEAD END on a cell that is not the path head');
+      A_failed[cell] = aux ? 1 : 2; A.leaf = aux; A.tryActive = 0;
+      A_flash[cell] = 26; A_flashK[cell] = 1;
+      burstAt(cellCX(c, false), cellCY(r, false), aux ? 10 : 5, RAMP_RED, 0.9, 1);
+      break;
+    case E_UNMARK:
+      // Undo: the cell leaves the active path exactly now.
+      assert(A.pathLen > 0 && A_path[A.pathLen - 1] === cell, 'UNMARK is not the top of the path');
+      A.pathLen--; A_onPath[cell] = 0;
+      A_flash[cell] = 22; A_flashK[cell] = 2;
+      break;
+    case E_BACKTRACK: {
+      // Return to the previous stack frame: must be the new path head.
+      const from = A.cur;
+      if (r < 0) { assert(A.pathLen === 0, 'root backtrack with a non-empty path'); break; }
+      assert(A.pathLen > 0 && A_path[A.pathLen - 1] === cell, 'BACKTRACK target is not the previous stack frame');
+      assert(adjacent(from, cell), 'BACKTRACK jumped more than one frame');
+      A.moveFrom = from; A.moveTo = cell; A.cur = cell; A.moving = 1;
+      trailBetween(from, cell);
+      break;
+    }
+    case E_COMPLETE:
+      assert(A.pathLen === SOL_LEN, 'replayed path length differs from solution');
+      for (let k = 0; k < SOL_LEN; k++) assert(A_path[k] === SOL[k], 'replayed path differs from solution');
+      A.tryActive = 0;
+      break;
+  }
+  assert(A.pathLen === EV_PL[i], 'replay path length diverged from solver');
+  sfxEvent(t, EV_DEP[i], d, aux);
+}
+
+/* =====================================================================
+   6. PARTICLE POOL  (preallocated, allocation-free)
+   ===================================================================== */
+const P_MAX = 256;
+const Px = new Float32Array(P_MAX), Py = new Float32Array(P_MAX);
+const Pvx = new Float32Array(P_MAX), Pvy = new Float32Array(P_MAX);
+const Plife = new Uint16Array(P_MAX), Pmax = new Uint16Array(P_MAX);
+const Pramp = new Uint8Array(P_MAX), Pgrav = new Uint8Array(P_MAX);
+let pNext = 0;
+
+// Color ramps: particles step through these palette indices over their life.
+const RAMP_DATA = new Uint8Array([13, 11, 10, 9,   13, 15, 23, 14,   13, 17, 16, 3,   13, 20, 19, 18,   11, 19, 18, 3]);
+const RAMP_SPARK = 0, RAMP_RED = 1, RAMP_PURPLE = 2, RAMP_GOAL = 3, RAMP_SOL = 4;
+
+let rngState = 1;
+function rnd() { rngState = (Math.imul(rngState, 1664525) + 1013904223) >>> 0; return rngState / 4294967296; }
+
+const reduceMotion = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function resetParticles() { Plife.fill(0); pNext = 0; }
+
+function spawn(x, y, vx, vy, life, ramp, grav) {
+  if (reduceMotion) return;
+  const k = pNext; pNext = (pNext + 1) % P_MAX;
+  Px[k] = x; Py[k] = y; Pvx[k] = vx; Pvy[k] = vy;
+  Plife[k] = life; Pmax[k] = life; Pramp[k] = ramp; Pgrav[k] = grav;
+}
+
+function burstAt(x, y, count, ramp, speed, grav) {
+  for (let n = 0; n < count; n++) {
+    const a = rnd() * 6.2831853, s = speed * (0.4 + rnd() * 0.8);
+    spawn(x, y, Math.cos(a) * s, Math.sin(a) * s - (grav ? 0.4 : 0), 18 + ((rnd() * 18) | 0), ramp, grav);
+  }
+}
+
+// Backtrack particles travel from the abandoned cell toward the parent frame.
+function trailBetween(fromCell, toCell) {
+  const fx = MX + (fromCell % W) * CELL + 3.5, fy = MY + ((fromCell / W) | 0) * CELL + 3.5;
+  const tx = MX + (toCell % W) * CELL + 3.5,   ty = MY + ((toCell / W) | 0) * CELL + 3.5;
+  for (let n = 0; n < 6; n++) {
+    const life = 16 + ((rnd() * 8) | 0);
+    spawn(fx + rnd() * 3 - 1.5, fy + rnd() * 3 - 1.5, (tx - fx) / life, (ty - fy) / life, life, RAMP_PURPLE, 0);
+  }
+}
+
+function updateParticles() {
+  for (let k = 0; k < P_MAX; k++) {
+    if (Plife[k] === 0) continue;
+    Px[k] += Pvx[k]; Py[k] += Pvy[k];
+    if (Pgrav[k]) Pvy[k] += 0.05;
+    Pvx[k] *= 0.97; Pvy[k] *= 0.97;
+    Plife[k]--;
+  }
+}
+
+// Candidate centres can be off-grid; clamp to the maze frame.
+function cellCX(c, clamp) { let x = MX + c * CELL + 3; if (clamp) x = x < MX - 1 ? MX - 1 : (x > MX + W * CELL ? MX + W * CELL : x); return x; }
+function cellCY(r, clamp) { let y = MY + r * CELL + 3; if (clamp) y = y < MY - 1 ? MY - 1 : (y > MY + H * CELL ? MY + H * CELL : y); return y; }
+
+/* =====================================================================
+   6b. 8-BIT SOUND  (NES-style: 2 pulse, 1 triangle, 1 noise channel)
+   Channels are created once and kept running; each sound only schedules
+   frequency / volume steps, so nothing is allocated per event.
+   Sound is driven by replayed events and never influences them.
+   ===================================================================== */
+let actx = null, master = null, soundOn = false;
+let p1o = null, p1g = null, p2o = null, p2g = null, tro = null, trg = null, nzs = null, nzg = null;
+const PENTA = new Uint8Array([0, 2, 4, 7, 9]);
+const DIR_SEMI = new Uint8Array([0, 2, 4, 7]);
+const FAN1 = new Uint8Array([72, 76, 79, 84]), FAN2 = new Uint8Array([67, 72, 76, 79]);
+const MASTER_VOL = 0.22;
+
+// Pulse wave with a given duty cycle, built from its Fourier series.
+function pulseWave(duty) {
+  const n = 48, re = new Float32Array(n), im = new Float32Array(n);
+  for (let k = 1; k < n; k++) {
+    re[k] = Math.sin(2 * Math.PI * k * duty) / (k * Math.PI);
+    im[k] = (1 - Math.cos(2 * Math.PI * k * duty)) / (k * Math.PI);
+  }
+  return actx.createPeriodicWave(re, im);
+}
+
+function initAudio() {
+  if (actx) return true;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return false;
+  try {
+    actx = new AC();
+    master = actx.createGain(); master.gain.value = 0; master.connect(actx.destination);
+    const mk = function (wave) {
+      const o = actx.createOscillator();
+      if (wave) o.setPeriodicWave(wave); else o.type = 'triangle';
+      const gn = actx.createGain(); gn.gain.value = 0;
+      o.connect(gn); gn.connect(master); o.start();
+      return [o, gn];
+    };
+    let ch = mk(pulseWave(0.125)); p1o = ch[0]; p1g = ch[1];   // pulse 1: 12.5% duty, thin
+    ch = mk(pulseWave(0.25));      p2o = ch[0]; p2g = ch[1];   // pulse 2: 25% duty, rounder
+    ch = mk(null);                 tro = ch[0]; trg = ch[1];   // triangle: bass / melody
+    // noise: 15-bit LFSR, same generator as the NES noise channel
+    const len = actx.sampleRate, buf = actx.createBuffer(1, len, actx.sampleRate), data = buf.getChannelData(0);
+    let reg = 1;
+    for (let i = 0; i < len; i++) {
+      const bit = (reg ^ (reg >> 1)) & 1;
+      reg = (reg >> 1) | (bit << 14);
+      data[i] = (reg & 1) ? 0.7 : -0.7;
+    }
+    nzs = actx.createBufferSource(); nzs.buffer = buf; nzs.loop = true;
+    nzg = actx.createGain(); nzg.gain.value = 0;
+    nzs.connect(nzg); nzg.connect(master); nzs.start();
+    return true;
+  } catch (e) { actx = null; return false; }
+}
+
+// Snap a frequency to the nearest pitch the NES pulse timer can make.
+function nesHz(midi) {
+  const f = 440 * Math.pow(2, (midi - 69) / 12);
+  const period = Math.max(8, Math.round(1789773 / (16 * f)) - 1);
+  return 1789773 / (16 * (period + 1));
+}
+function depthNote(d) { return 45 + 12 * ((d / 5) | 0) + PENTA[d % 5]; }
+
+function cut(o, gn, t) { o.frequency.cancelScheduledValues(t); gn.gain.cancelScheduledValues(t); }
+// One note with a stepped (4-bit style) volume envelope.
+function tone(o, gn, t, midi, dur, vol) {
+  o.frequency.setValueAtTime(nesHz(midi), t);
+  gn.gain.setValueAtTime(vol, t);
+  gn.gain.setValueAtTime(vol * 0.6, t + dur * 0.5);
+  gn.gain.setValueAtTime(vol * 0.3, t + dur * 0.8);
+  gn.gain.setValueAtTime(0, t + dur);
+}
+function noise(t, rate, dur, vol) {
+  nzs.playbackRate.cancelScheduledValues(t); nzg.gain.cancelScheduledValues(t);
+  nzs.playbackRate.setValueAtTime(rate, t);
+  nzg.gain.setValueAtTime(vol, t);
+  nzg.gain.setValueAtTime(vol * 0.5, t + dur * 0.5);
+  nzg.gain.setValueAtTime(0, t + dur);
+}
+
+function sfxEvent(type, depth, dir, aux) {
+  if (!soundOn) return;
+  const t = actx.currentTime + 0.01;
+  switch (type) {
+    case E_TRY:        // quiet tick, pitch by direction
+      cut(p1o, p1g, t); tone(p1o, p1g, t, 84 + DIR_SEMI[dir], 0.03, 0.08); break;
+    case E_INVALID:
+      cut(p1o, p1g, t);
+      if (aux === R_WALL) noise(t, 0.35, 0.05, 0.22);                 // thud against a wall
+      else if (aux === R_OOB) tone(p1o, p1g, t, 38, 0.05, 0.16);      // low bonk at the edge
+      else { tone(p1o, p1g, t, 52, 0.03, 0.14); tone(p1o, p1g, t + 0.03, 47, 0.04, 0.12); }
+      break;
+    case E_VALID:      // rising two-step
+      cut(p1o, p1g, t); tone(p1o, p1g, t, 79 + DIR_SEMI[dir], 0.03, 0.12); tone(p1o, p1g, t + 0.03, 86 + DIR_SEMI[dir], 0.04, 0.12); break;
+    case E_ENTER:      // pitch climbs with recursion depth
+      cut(p2o, p2g, t); tone(p2o, p2g, t, depthNote(depth), 0.11, 0.26); break;
+    case E_MARK:
+      cut(tro, trg, t); tone(tro, trg, t, depthNote(depth) - 12, 0.05, 0.4); break;
+    case E_DEAD: {     // falling arpeggio; leaf dead ends also crash
+      const n = depthNote(depth);
+      cut(p2o, p2g, t);
+      tone(p2o, p2g, t, n, 0.07, 0.26); tone(p2o, p2g, t + 0.07, n - 4, 0.07, 0.22); tone(p2o, p2g, t + 0.14, n - 9, 0.12, 0.2);
+      if (aux) noise(t, 0.6, 0.16, 0.2);
+      break;
+    }
+    case E_UNMARK:
+      cut(tro, trg, t); tone(tro, trg, t, depthNote(depth) - 12, 0.06, 0.35); break;
+    case E_BACKTRACK: {  // stepped slide from the abandoned depth down to the parent's
+      const from = depthNote(depth + 1), to = depthNote(depth);
+      cut(p2o, p2g, t);
+      p2g.gain.setValueAtTime(0.22, t);
+      for (let s = 0; s < 4; s++) p2o.frequency.setValueAtTime(nesHz(from + ((to - from) * s) / 3), t + s * 0.03);
+      p2g.gain.setValueAtTime(0.14, t + 0.09);
+      p2g.gain.setValueAtTime(0, t + 0.13);
+      break;
+    }
+    case E_GOAL: {     // fanfare on all three tonal channels
+      cut(p1o, p1g, t); cut(p2o, p2g, t); cut(tro, trg, t);
+      for (let k = 0; k < 4; k++) { tone(p1o, p1g, t + k * 0.08, FAN1[k], 0.08, 0.22); tone(p2o, p2g, t + k * 0.08, FAN2[k], 0.08, 0.16); }
+      tone(p1o, p1g, t + 0.32, 84, 0.5, 0.22); tone(p2o, p2g, t + 0.32, 79, 0.5, 0.16);
+      tone(tro, trg, t, 36, 0.16, 0.5); tone(tro, trg, t + 0.16, 43, 0.16, 0.5); tone(tro, trg, t + 0.32, 48, 0.5, 0.5);
+      break;
+    }
+  }
+}
+
+// Solution walk: one note per revealed cell, climbing the scale.
+function sfxSolutionStep(k) {
+  if (!soundOn) return;
+  const t = actx.currentTime + 0.01, n = 36 + 12 * ((k / 5) | 0) + PENTA[k % 5];
+  cut(tro, trg, t); tone(tro, trg, t, n, 0.09, 0.45);
+  cut(p1o, p1g, t); tone(p1o, p1g, t, n + 12, 0.05, 0.06);
+  if (k === SOL_LEN - 1) {
+    cut(p2o, p2g, t);
+    tone(p2o, p2g, t + 0.08, n + 7, 0.4, 0.16);
+    tone(p1o, p1g, t + 0.08, n + 12, 0.4, 0.14);
+  }
+}
+function sfxReset() {
+  if (!soundOn) return;
+  const t = actx.currentTime + 0.01;
+  nzs.playbackRate.cancelScheduledValues(t); nzg.gain.cancelScheduledValues(t);
+  for (let s = 0; s < 6; s++) { nzs.playbackRate.setValueAtTime(1 - s * 0.15, t + s * 0.05); nzg.gain.setValueAtTime(0.16 - s * 0.025, t + s * 0.05); }
+  nzg.gain.setValueAtTime(0, t + 0.3);
+}
+function sfxReady() {
+  if (!soundOn) return;
+  const t = actx.currentTime + 0.01;
+  cut(p1o, p1g, t); tone(p1o, p1g, t, 67, 0.07, 0.14); tone(p1o, p1g, t + 0.08, 74, 0.1, 0.14);
+}
+function sfxSpeed() {
+  if (!soundOn) return;
+  const t = actx.currentTime + 0.01;
+  cut(p1o, p1g, t); tone(p1o, p1g, t, A.speed === 1 ? 72 : A.speed === 2 ? 79 : 84, 0.05, 0.14);
+}
+
+function toggleSound() {
+  if (!soundOn) {
+    if (!initAudio()) return;
+    if (actx.state !== 'running') actx.resume();
+    soundOn = true;
+    master.gain.setValueAtTime(MASTER_VOL, actx.currentTime);
+    sfxReady();
+  } else {
+    soundOn = false;
+    master.gain.setValueAtTime(0, actx.currentTime);
+  }
+}
+
+/* =====================================================================
+   7. UPDATE LOOP  (fixed 60 Hz; playback timing never touches the solver)
+   ===================================================================== */
+function update() {
+  A.tick++; A.phaseT++;
+  updateParticles();
+  for (let i = 0; i < N; i++) if (A_flash[i]) A_flash[i]--;
+  if (A.popTimer) A.popTimer--;
+
+  switch (A.phase) {
+    case PH_INTRO:
+      if (A.phaseT === 1) sfxReady();
+      if (A.phaseT >= INTRO_T) {
+        A.phase = PH_SOLVING; A.phaseT = 0;
+        A.evIdx = 0; A.evElapsed = 0; applyEvent(0);
+      }
+      break;
+    case PH_SOLVING:
+      // Consume the recorded stream: each event holds for its own duration.
+      A.evElapsed += A.speed;
+      while (A.evIdx < EV_N && A.evElapsed >= DUR[EV_T[A.evIdx]]) {
+        A.evElapsed -= DUR[EV_T[A.evIdx]];
+        A.evIdx++;
+        if (A.evIdx < EV_N) applyEvent(A.evIdx);
+      }
+      if (A.evIdx >= EV_N) { A.evIdx = EV_N - 1; A.phase = PH_SOLUTION; A.phaseT = 0; A.moving = 0; }
+      break;
+    case PH_SOLUTION:
+      // one note each time the sweep reveals the next solution cell
+      if (A.phaseT === 1) sfxSolutionStep(0);
+      else if ((A.phaseT & 3) === 0 && (A.phaseT >> 2) < SOL_LEN) sfxSolutionStep(A.phaseT >> 2);
+      if ((A.phaseT & 7) === 0 && A.phaseT > SOL_LEN * 4) {
+        const k = (A.phaseT >> 2) % SOL_LEN, cell = SOL[k];
+        burstAt(MX + (cell % W) * CELL + 3.5, MY + ((cell / W) | 0) * CELL + 3.5, 2, RAMP_SOL, 0.4, 0);
+      }
+      if (A.phaseT >= SOLUTION_T) { A.phase = PH_RESET; A.phaseT = 0; }
+      break;
+    case PH_RESET:
+      if (A.phaseT === 1) sfxReset();
+      if (A.phaseT === (RESET_T >> 1)) { runSolver(); resetAnim(); }   // regenerate + restore maze
+      if (A.phaseT >= RESET_T) { A.phase = PH_INTRO; A.phaseT = 0; }
+      break;
+  }
+}
+
+/* =====================================================================
+   8. PIXEL ART RENDERING
+   ===================================================================== */
+const off = document.createElement('canvas'); off.width = LW; off.height = LH;
+const g = off.getContext('2d');
+g.imageSmoothingEnabled = false;
+const staticLayer = document.createElement('canvas'); staticLayer.width = LW; staticLayer.height = LH;
+
+function rect(ctx, col, x, y, w, h) { ctx.fillStyle = PAL[col]; ctx.fillRect(x | 0, y | 0, w | 0, h | 0); }
+function outline(ctx, col, x, y, w, h) {
+  ctx.fillStyle = PAL[col];
+  ctx.fillRect(x, y, w, 1); ctx.fillRect(x, y + h - 1, w, 1);
+  ctx.fillRect(x, y, 1, h); ctx.fillRect(x + w - 1, y, 1, h);
+}
+
+// 3x5 bitmap font, each digit is one 3-bit row (octal).
+const GLYPH = new Uint16Array(128);
+(function buildFont() {
+  const src = {
+    A:'25755',B:'65656',C:'34443',D:'65556',E:'74647',F:'74644',G:'34553',H:'55755',I:'72227',J:'11152',
+    K:'55655',L:'44447',M:'57755',N:'65555',O:'25552',P:'65644',Q:'25563',R:'65655',S:'34216',T:'72222',
+    U:'55557',V:'55552',W:'55775',X:'55255',Y:'55222',Z:'71247',
+    '0':'75557','1':'26227','2':'61247','3':'61216','4':'55711','5':'74616','6':'34757','7':'71222','8':'75757','9':'75716',
+    ':':'02020','-':'00700','!':'22202','/':'11244','.':'00002','>':'42124','<':'12421','+':'02720',',':'00024','?':'61202',
+  };
+  for (const ch in src) {
+    let bits = 0;
+    for (let row = 0; row < 5; row++) bits = (bits << 3) | (src[ch].charCodeAt(row) - 48);
+    GLYPH[ch.charCodeAt(0)] = bits;
+  }
+})();
+
+function drawGlyph(ctx, code, x, y) {
+  const bits = code < 128 ? GLYPH[code] : 0;
+  if (!bits) return;
+  for (let row = 0; row < 5; row++) {
+    const line = (bits >> ((4 - row) * 3)) & 7;
+    if (line & 4) ctx.fillRect(x, y + row, 1, 1);
+    if (line & 2) ctx.fillRect(x + 1, y + row, 1, 1);
+    if (line & 1) ctx.fillRect(x + 2, y + row, 1, 1);
+  }
+}
+function drawText(ctx, s, x, y, col) {
+  ctx.fillStyle = PAL[col];
+  for (let i = 0; i < s.length; i++) drawGlyph(ctx, s.charCodeAt(i), x + i * 4, y);
+}
+function drawTextR(ctx, s, xr, y, col) { drawText(ctx, s, xr - s.length * 4, y, col); }
+// Right-aligned integer; returns the left edge. No strings allocated.
+function drawNumR(ctx, n, xr, y, col) {
+  ctx.fillStyle = PAL[col];
+  let x = xr; n = n | 0;
+  do { x -= 4; drawGlyph(ctx, 48 + (n % 10), x, y); n = (n / 10) | 0; } while (n > 0);
+  return x;
+}
+function numWidth(n) { let w = 4; while (n >= 10) { w += 4; n = (n / 10) | 0; } return w; }
+
+// Static layer: background, frame, walls, floors, labels, legend.
+function buildStatic() {
+  const s = staticLayer.getContext('2d');
+  rect(s, 0, 0, 0, LW, LH);
+  rect(s, 1, 0, 0, LW, 9);                  // top bar
+  drawText(s, 'DFS BACKTRACK', 4, 2, 22);
+  rect(s, 3, 2, 10, 68, 68);                // maze frame
+  rect(s, 0, 3, 11, 66, 66);
+  for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) {
+    const x = MX + c * CELL, y = MY + r * CELL;
+    if (WALL[r * W + c]) {
+      rect(s, 5, x, y, 8, 8);
+      rect(s, 6, x, y, 8, 1); rect(s, 6, x, y, 1, 4);
+      rect(s, 4, x, y + 7, 8, 1); rect(s, 4, x + 7, y + 1, 1, 7);
+      rect(s, 4, x + 1, y + 3, 6, 1);                  // mortar course
+      rect(s, 4, x + 4, y + 1, 1, 2); rect(s, 4, x + 2, y + 4, 1, 3);
+      rect(s, 6, x + 1, y + 4, 1, 3);
+    } else {
+      rect(s, 2, x, y, 8, 8);
+      rect(s, 3, x, y, 1, 1);
+    }
+  }
+  // right panel
+  rect(s, 1, 72, 10, 54, 68);
+  drawText(s, 'DEPTH', 74, 13, 21);
+  drawText(s, 'CALLS', 74, 20, 21);
+  drawText(s, 'BACKTRACKS', 74, 27, 21);
+  drawText(s, 'PATH', 74, 34, 21);
+  drawText(s, 'TRY', 74, 41, 21);
+  rect(s, 3, 74, 48, 50, 1);
+  // bottom strip: legend + timeline
+  rect(s, 1, 2, 80, 124, 15);
+  const legendCol = [10, 8, 15, 17, 19], legendTxt = ['PATH', 'SEEN', 'DEAD', 'UNDO', 'SOLN'];
+  for (let k = 0; k < 5; k++) { const x = 4 + k * 24; rect(s, legendCol[k], x, 83, 3, 3); drawText(s, legendTxt[k], x + 5, 82, 22); }
+}
+
+// Timeline markers, derived from the real event stream.
+const TL_X = 4, TL_Y = 89, TL_W = 78;
+const TL_MARK = new Uint8Array(TL_W);
+function buildTimeline() {
+  TL_MARK.fill(0);
+  for (let i = 0; i < EV_N; i++) {
+    const col = Math.min(TL_W - 1, ((i * TL_W) / EV_N) | 0), t = EV_T[i];
+    let kind = 0;
+    if (t === E_GOAL) kind = 3; else if (t === E_DEAD && EV_A[i]) kind = 2; else if (t === E_BACKTRACK) kind = 1;
+    if (kind > TL_MARK[col]) TL_MARK[col] = kind;
+  }
+}
+const TL_COLOR = new Uint8Array([0, 17, 15, 19]);
+
+function cellX(i) { return MX + (i % W) * CELL; }
+function cellY(i) { return MY + ((i / W) | 0) * CELL; }
+
+function drawCells() {
+  const solShown = A.phase === PH_SOLUTION;
+  for (let i = 0; i < N; i++) {
+    if (WALL[i]) continue;
+    const x = cellX(i), y = cellY(i);
+    if (A_onPath[i]) {
+      rect(g, solShown ? 18 : 9, x + 1, y + 1, 6, 6);
+    } else if (A_failed[i] === 1) {                 // leaf dead end: subtle X
+      rect(g, 14, x + 1, y + 1, 6, 6);
+      g.fillStyle = PAL[15];
+      g.fillRect(x + 2, y + 2, 1, 1); g.fillRect(x + 5, y + 2, 1, 1);
+      g.fillRect(x + 3, y + 3, 2, 2);
+      g.fillRect(x + 2, y + 5, 1, 1); g.fillRect(x + 5, y + 5, 1, 1);
+    } else if (A_failed[i] === 2) {                 // unwound frame
+      rect(g, 16, x + 1, y + 1, 6, 6);
+      rect(g, 17, x + 3, y + 3, 2, 2);
+    } else if (A_visited[i]) {
+      rect(g, 7, x + 1, y + 1, 6, 6);
+      rect(g, 8, x + 3, y + 3, 2, 2);
+    }
+  }
+}
+
+function drawPath() {
+  if (A.pathLen === 0) return;
+  const sol = A.phase === PH_SOLUTION;
+  const reveal = sol ? Math.min(A.pathLen, (A.phaseT >> 2) + 1) : A.pathLen;
+  const march = sol && A.phaseT > SOL_LEN * 4 ? (A.phaseT >> 2) % A.pathLen : -1;
+  for (let k = 0; k < A.pathLen; k++) {
+    const a = A_path[k], ax = cellX(a) + 3, ay = cellY(a) + 3;
+    const lit = sol && k < reveal;
+    const col = lit ? (k === march ? 20 : 19) : (sol ? 18 : 10);
+    g.fillStyle = PAL[col];
+    g.fillRect(ax, ay, 2, 2);
+    if (k > 0) {
+      const b = A_path[k - 1], bx = cellX(b) + 3, by = cellY(b) + 3;
+      if (ay === by) g.fillRect(Math.min(ax, bx), ay, 10, 2);
+      else g.fillRect(ax, Math.min(ay, by), 2, 10);
+    }
+    if (k === march) { g.fillStyle = PAL[20]; g.fillRect(ax - 1, ay - 1, 4, 4); }
+  }
+}
+
+function drawFlashes() {
+  for (let i = 0; i < N; i++) {
+    const f = A_flash[i];
+    if (!f) continue;
+    const x = cellX(i), y = cellY(i);
+    if (A_flashK[i] === 1) { if ((f >> 2) & 1) rect(g, 15, x + 1, y + 1, 6, 6); }
+    else rect(g, f > 14 ? 13 : 17, x + 1, y + 1, 6, 6);
+  }
+}
+
+// 6x6 goal gem sprite: 0 none, 1 outline, 2 fill, 3 shine.
+const GEM = new Uint8Array([
+  0,0,1,1,0,0,
+  0,1,3,2,1,0,
+  1,3,2,2,2,1,
+  1,2,2,2,2,1,
+  0,1,2,2,1,0,
+  0,0,1,1,0,0,
+]);
+function drawMarkers() {
+  // start: green corner brackets
+  const sx = cellX(START), sy = cellY(START);
+  g.fillStyle = PAL[19];
+  g.fillRect(sx, sy, 3, 1); g.fillRect(sx, sy, 1, 3);
+  g.fillRect(sx + 5, sy + 7, 3, 1); g.fillRect(sx + 7, sy + 5, 1, 3);
+  // goal: blinking gem
+  const gx = cellX(GOAL) + 1, gy = cellY(GOAL) + 1;
+  const blink = (A.tick >> 4) & 1;
+  const oc = A.phase === PH_SOLUTION ? 19 : (blink ? 11 : 12), fc = A.phase === PH_SOLUTION ? 20 : 10;
+  for (let k = 0; k < 36; k++) {
+    const v = GEM[k];
+    if (!v) continue;
+    g.fillStyle = PAL[v === 1 ? oc : v === 2 ? fc : 13];
+    g.fillRect(gx + (k % 6), gy + ((k / 6) | 0), 1, 1);
+  }
+}
+
+function drawCandidate() {
+  if (A.phase !== PH_SOLVING || !A.tryActive || A.pathLen === 0) return;
+  const head = A_path[A.pathLen - 1];
+  const hx = cellX(head), hy = cellY(head);
+  const col = A.tryStatus === 1 ? 19 : A.tryStatus === 2 ? 15 : (((A.tick >> 3) & 1) ? 13 : 12);
+  // direction indicator from the current cell
+  g.fillStyle = PAL[col];
+  switch (A.tryDir) {
+    case 0: g.fillRect(hx + 5, hy + 3, 3, 2); break;
+    case 1: g.fillRect(hx + 3, hy + 5, 2, 3); break;
+    case 2: g.fillRect(hx, hy + 3, 3, 2); break;
+    case 3: g.fillRect(hx + 3, hy, 2, 3); break;
+  }
+  const r = A.tryR, c = A.tryC;
+  if (r >= 0 && c >= 0 && r < H && c < W) {
+    const x = MX + c * CELL, y = MY + r * CELL;
+    outline(g, col, x, y, 8, 8);
+    if (A.tryStatus === 2) {
+      g.fillStyle = PAL[15];
+      g.fillRect(x + 2, y + 2, 1, 1); g.fillRect(x + 5, y + 2, 1, 1); g.fillRect(x + 3, y + 3, 2, 2);
+      g.fillRect(x + 2, y + 5, 1, 1); g.fillRect(x + 5, y + 5, 1, 1);
+    }
+  } else {
+    // off-grid candidate: mark the maze frame where it would have been
+    g.fillStyle = PAL[col];
+    g.fillRect(cellCX(c, true), cellCY(r, true), 2, 2);
+  }
+}
+
+// Cursor position: interpolated between discrete cells, quantized to ~10 fps steps.
+function cursorPos() {
+  let from = A.cur, to = A.cur, tq = 1;
+  if (A.phase === PH_SOLVING && A.moving && A.evIdx >= 0) {
+    const dur = DUR[EV_T[A.evIdx]];
+    const steps = Math.max(1, (dur / 6) | 0);
+    const k = Math.min(steps, ((A.evElapsed / dur) * steps) | 0);
+    tq = k / steps; from = A.moveFrom; to = A.moveTo;
+  }
+  const fx = cellX(from), fy = cellY(from), tx = cellX(to), ty = cellY(to);
+  curX = (fx + (tx - fx) * tq) | 0; curY = (fy + (ty - fy) * tq) | 0;
+}
+let curX = 0, curY = 0;
+
+function drawCursor() {
+  if (A.phase === PH_RESET) return;
+  cursorPos();
+  const p = reduceMotion ? 0 : ((A.tick >> 3) & 1);
+  const backing = A.phase === PH_SOLVING && (A.event === E_BACKTRACK || A.event === E_UNMARK);
+  const col = A.phase === PH_SOLUTION ? 20 : backing ? 17 : 11;
+  const x0 = curX - 1 - p, y0 = curY - 1 - p, x1 = curX + 8 + p, y1 = curY + 8 + p;
+  g.fillStyle = PAL[col];
+  g.fillRect(x0, y0, 3, 1); g.fillRect(x0, y0, 1, 3);
+  g.fillRect(x1 - 2, y0, 3, 1); g.fillRect(x1, y0, 1, 3);
+  g.fillRect(x0, y1, 3, 1); g.fillRect(x0, y1 - 2, 1, 3);
+  g.fillRect(x1 - 2, y1, 3, 1); g.fillRect(x1, y1 - 2, 1, 3);
+  if (A.phase !== PH_INTRO || ((A.tick >> 4) & 1)) { g.fillStyle = PAL[13]; g.fillRect(curX + 3, curY + 3, 2, 2); }
+}
+
+function drawDepthPopup() {
+  if (!A.popTimer || A.phase !== PH_SOLVING) return;
+  const w = 4 + numWidth(A.popDepth) + 1;
+  let x = cellX(A.popCell) + 4 - (w >> 1), y = cellY(A.popCell) - 8;
+  if (y < MY) y = cellY(A.popCell) + 9;
+  if (x < MX - 1) x = MX - 1;
+  if (x + w > MX + 65) x = MX + 65 - w;
+  rect(g, 0, x, y, w, 7);
+  drawText(g, 'D', x + 1, y + 1, 11);
+  drawNumR(g, A.popDepth, x + w, y + 1, 12);
+}
+
+function drawParticles() {
+  for (let k = 0; k < P_MAX; k++) {
+    const life = Plife[k];
+    if (!life) continue;
+    const age = Pmax[k] - life;
+    const step = Math.min(3, ((age * 4) / Pmax[k]) | 0);
+    g.fillStyle = PAL[RAMP_DATA[Pramp[k] * 4 + step]];
+    const x = Px[k] | 0, y = Py[k] | 0;
+    if (x >= 0 && y >= 0 && x < LW && y < LH) g.fillRect(x, y, 1, 1);
+  }
+}
+
+function drawResetWipe() {
+  if (A.phase !== PH_RESET) return;
+  const half = RESET_T >> 1;
+  const prog = A.phaseT < half ? A.phaseT / half : 1 - (A.phaseT - half) / half;
+  const lim = (prog * 16) | 0;
+  for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) {
+    if (r + c >= lim) continue;
+    const x = MX + c * CELL, y = MY + r * CELL;
+    rect(g, 1, x, y, 8, 8);
+    rect(g, 3, x + 3, y + 3, 2, 2);
+  }
+}
+
+/* =====================================================================
+   9. HUD RENDERING  (values read only from replayed algorithm state)
+   ===================================================================== */
+function drawHUD() {
+  // top-right: state machine label
+  let label = 'IDLE', lc = 21;
+  if (A.phase === PH_SOLVING && A.event >= 0) { label = STATE_NAME[A.event]; lc = EVENT_COLOR[A.event]; }
+  else if (A.phase === PH_SOLUTION) { label = 'SOLUTION FOUND'; lc = ((A.tick >> 4) & 1) ? 19 : 20; }
+  else if (A.phase === PH_RESET) { label = 'RESET'; lc = 21; }
+  drawTextR(g, label, 125, 2, lc);
+
+  // speaker icon (tap target for sound)
+  const spk = soundOn ? SPK_ON : SPK_OFF;
+  g.fillStyle = PAL[soundOn ? 11 : (((A.tick >> 5) & 1) ? 22 : 21)];
+  for (let k = 0; k < 40; k++) if (spk[k]) g.fillRect(SPK_X + (k & 7), 2 + (k >> 3), 1, 1);
+
+  drawNumR(g, A.depth, 125, 13, 12);
+  drawNumR(g, A.calls, 125, 20, 12);
+  drawNumR(g, A.backtracks, 125, 27, 17);
+  drawNumR(g, A.pathLen, 125, 34, 10);
+  if (A.phase === PH_SOLVING && A.tryDir >= 0 && A.tryActive) drawTextR(g, DIR_NAME[A.tryDir], 125, 41, 11);
+  else drawTextR(g, '-', 125, 41, 21);
+
+  if (A.phase === PH_SOLUTION) {
+    drawText(g, 'SOLUTION', 74, 51, 19);
+    if ((A.tick >> 4) & 1) drawText(g, 'FOUND!', 74, 58, 20);
+    drawText(g, 'LENGTH', 74, 65, 21);
+    drawNumR(g, SOL_LEN, 125, 65, 19);
+  } else if (A.phase === PH_SOLVING && A.event >= 0) {
+    drawText(g, 'EVENT', 74, 51, 21);
+    drawText(g, EVENT_NAME[A.event], 74, 58, EVENT_COLOR[A.event]);
+    let detail = '';
+    switch (A.event) {
+      case E_TRY: detail = DIR_NAME[A.tryDir]; break;
+      case E_INVALID: detail = REASON_NAME[A.reason]; break;
+      case E_VALID: detail = 'OPEN CELL'; break;
+      case E_ENTER: detail = 'PUSH FRAME'; break;
+      case E_MARK: detail = 'PATH PUSH'; break;
+      case E_GOAL: detail = 'RETURN TRUE'; break;
+      case E_DEAD: detail = A.leaf ? 'NO MOVES' : 'ALL FAILED'; break;
+      case E_UNMARK: detail = 'PATH POP'; break;
+      case E_BACKTRACK: detail = 'POP FRAME'; break;
+      case E_COMPLETE: detail = 'SOLVED'; break;
+    }
+    drawText(g, detail, 74, 65, 22);
+  } else {
+    drawText(g, 'EVENT', 74, 51, 21);
+    drawText(g, A.phase === PH_RESET ? 'RESET' : 'READY', 74, 58, 22);
+    if (!soundOn && A.phase === PH_INTRO) drawText(g, 'TAP SPEAKER', 74, 65, 21);
+  }
+
+  // call stack: one pip per frame on the recursion path
+  const pips = Math.min(A.pathLen, 20);
+  for (let k = 0; k < pips; k++) {
+    const top = k === A.pathLen - 1;
+    rect(g, top ? 11 : (k & 1 ? 9 : 10), 74 + k * 2, 72, 2, 3);
+  }
+  if (A.pathLen > 20) drawText(g, '+', 115, 71, 11);
+
+  // timeline of the real event stream
+  const playCol = A.evIdx < 0 ? -1 : Math.min(TL_W - 1, ((A.evIdx * TL_W) / EV_N) | 0);
+  for (let col = 0; col < TL_W; col++) {
+    const m = TL_MARK[col];
+    rect(g, m ? TL_COLOR[m] : (col <= playCol ? 21 : 3), TL_X + col, TL_Y, 1, 3);
+  }
+  if (playCol >= 0) rect(g, 13, TL_X + playCol, TL_Y - 1, 1, 5);
+  drawNumR(g, A.speed, 90, 88, 11); drawText(g, 'X', 90, 88, 11);
+  const left = drawNumR(g, EV_N, 125, 88, 21);
+  drawText(g, '/', left - 4, 88, 21);
+  drawNumR(g, A.evIdx < 0 ? 0 : A.evIdx + 1, left - 4, 88, 22);
+}
+
+// 8x5 speaker sprites (on: sound waves, off: an X)
+const SPK_X = 58;
+const SPK_ON = new Uint8Array([
+  0,0,0,1,0,0,0,1,
+  1,1,1,1,0,1,0,1,
+  1,1,1,1,0,1,0,1,
+  1,1,1,1,0,1,0,1,
+  0,0,0,1,0,0,0,1,
+]);
+const SPK_OFF = new Uint8Array([
+  0,0,0,1,0,0,0,0,
+  1,1,1,1,0,1,0,1,
+  1,1,1,1,0,0,1,0,
+  1,1,1,1,0,1,0,1,
+  0,0,0,1,0,0,0,0,
+]);
+
+let fatalLines = null;
+function drawFatal() {
+  rect(g, 14, 0, 0, LW, LH);
+  drawText(g, 'ASSERTION FAILED', 4, 4, 13);
+  for (let k = 0; k < fatalLines.length; k++) drawText(g, fatalLines[k], 4, 16 + k * 7, 12);
+}
+
+function render() {
+  if (fatal) { drawFatal(); return; }
+  g.drawImage(staticLayer, 0, 0);
+  drawCells();
+  drawPath();
+  drawFlashes();
+  drawMarkers();
+  drawCandidate();
+  drawCursor();
+  drawDepthPopup();
+  drawParticles();
+  drawResetWipe();
+  drawHUD();
+}
+
+/* =====================================================================
+   10. RESIZE / DISPLAY SCALING  (largest integer factor, centered)
+   ===================================================================== */
+const screen = document.getElementById('screen');
+const sctx = screen.getContext('2d');
+let scale = 1, ox = 0, oy = 0;
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  const w = Math.max(1, Math.floor(window.innerWidth * dpr)), h = Math.max(1, Math.floor(window.innerHeight * dpr));
+  screen.width = w; screen.height = h;
+  scale = Math.max(1, Math.floor(Math.min(w / LW, h / LH)));
+  ox = ((w - LW * scale) / 2) | 0; oy = ((h - LH * scale) / 2) | 0;
+  sctx.imageSmoothingEnabled = false;
+  sctx.fillStyle = PAL[0]; sctx.fillRect(0, 0, w, h);
+}
+window.addEventListener('resize', resize);
+
+function cycleSpeed() { A.speed = A.speed === 1 ? 2 : A.speed === 2 ? 4 : 1; sfxSpeed(); }
+// Tap the speaker (top bar) to toggle sound; tap anywhere else to change speed.
+screen.addEventListener('pointerdown', function (e) {
+  const dpr = window.devicePixelRatio || 1;
+  const lx = ((e.clientX * dpr - ox) / scale) | 0, ly = ((e.clientY * dpr - oy) / scale) | 0;
+  if (lx >= SPK_X - 6 && lx <= SPK_X + 12 && ly >= -4 && ly <= 10) toggleSound();
+  else cycleSpeed();
+});
+window.addEventListener('keydown', function (e) {
+  if (e.code === 'Space') { e.preventDefault(); cycleSpeed(); }
+  else if (e.code === 'KeyM') toggleSound();
+});
+
+/* =====================================================================
+   11. MAIN LOOP
+   ===================================================================== */
+function fail(err) {
+  fatal = String(err && err.message ? err.message : err).toUpperCase();
+  fatalLines = [];
+  const words = fatal.split(' ');
+  let line = '';
+  for (const wd of words) {
+    if ((line + ' ' + wd).trim().length > 30) { fatalLines.push(line); line = wd; }
+    else line = (line + ' ' + wd).trim();
+  }
+  if (line) fatalLines.push(line);
+  const box = document.getElementById('err');
+  box.textContent = 'Assertion failed: ' + (err && err.message ? err.message : err);
+  box.hidden = false;
+  console.error(err);
+}
+
+let last = 0, acc = 0;
+function frame(now) {
+  if (!last) last = now;
+  acc += Math.min(250, now - last); last = now;
+  if (!fatal) {
+    try { while (acc >= TICK_MS) { update(); acc -= TICK_MS; } }
+    catch (e) { fail(e); }
+  }
+  render();
+  sctx.drawImage(off, 0, 0, LW, LH, ox, oy, LW * scale, LH * scale);
+  requestAnimationFrame(frame);
+}
+
+try {
+  buildStatic();
+  runSolver();       // solve the whole puzzle first into a deterministic event stream
+  resetAnim();
+} catch (e) { fail(e); }
+resize();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
