@@ -174,7 +174,7 @@ El detalle está en [`.claude/skills/contribute/SKILL.md`](.claude/skills/contri
 - Usan [Conventional Commits](https://www.conventionalcommits.org/) con un asunto corto, por ejemplo `feat(algo): add comb sort`.
 - Van sin trailers de atribución a herramientas de IA.
 
-**Merge:** con el CI en verde, el PR se mergea con squash. Un maintainer después promueve `dev` a `main`.
+**Merge:** hacen falta el CI en verde y la **aprobación del maintainer (@JoseMiguez98)**, que es obligatoria en `dev` y en `main`. Si subís cambios nuevos al PR, hay que volver a aprobarlo. Después el PR se mergea con squash, y el maintainer promueve `dev` a `main`.
 
 ### ✅ Checklist del PR
 
