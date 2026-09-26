@@ -1,0 +1,29 @@
+name: Theme nuevo
+description: Proponé un look & sound nuevo (consola, época, alto contraste…).
+labels: [theme]
+body:
+  - type: input
+    id: name
+    attributes:
+      label: Theme
+      placeholder: Game Boy (DMG)
+    validations:
+      required: true
+  - type: textarea
+    id: look
+    attributes:
+      label: Look
+      description: Paleta, tipografía, renderer (pixel o vectorial) y referencias visuales.
+    validations:
+      required: true
+  - type: textarea
+    id: sound
+    attributes:
+      label: Sonido
+      description: Qué chip o estilo emula (APU, FM, PSG, suave…) y si tendría música.
+  - type: checkboxes
+    id: doing
+    attributes:
+      label: ¿Lo implementás vos?
+      options:
+        - label: Quiero implementarlo siguiendo CONTRIBUTING.md

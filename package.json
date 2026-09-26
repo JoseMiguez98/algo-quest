@@ -1,7 +1,17 @@
 {
-  "name": "algo-visualizer",
+  "name": "algo-quest",
   "private": true,
   "version": "0.1.0",
+  "description": "Visualizaciones educativas de algoritmos con estética de consola de 16 bits y sonido procedural.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JoseMiguez98/algo-quest.git"
+  },
+  "homepage": "https://josemiguez98.github.io/algo-quest/",
+  "engines": {
+    "node": ">=20"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",

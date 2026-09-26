@@ -1,0 +1,39 @@
+name: Algoritmo nuevo
+description: Proponé un algoritmo (o una categoría) para visualizar.
+labels: [algorithm]
+body:
+  - type: input
+    id: name
+    attributes:
+      label: Algoritmo
+      placeholder: Comb sort
+    validations:
+      required: true
+  - type: dropdown
+    id: category
+    attributes:
+      label: Categoría
+      options:
+        - Ordenamiento
+        - Grafos / recorridos
+        - Categoría nueva (explicá abajo)
+    validations:
+      required: true
+  - type: textarea
+    id: variant
+    attributes:
+      label: Variante y referencias
+      description: Qué variante exacta (pivote, secuencia de saltos, desempates…) y 2–3 fuentes que la describan.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Qué enseña
+      description: Qué idea nueva aporta frente a los algoritmos que ya están.
+  - type: checkboxes
+    id: doing
+    attributes:
+      label: ¿Lo implementás vos?
+      options:
+        - label: Quiero implementarlo siguiendo CONTRIBUTING.md
