@@ -9,7 +9,7 @@ export default defineConfig({
   plugins: [algorithmPages()],
   build: {
     rollupOptions: {
-      input: { index: resolve(__dirname, 'index.html'), visualizer: resolve(__dirname, 'visualizer.html'), compare: resolve(__dirname, 'compare.html') },
+      input: { index: resolve(__dirname, 'index.html'), visualizer: resolve(__dirname, 'visualizer.html'), compare: resolve(__dirname, 'compare.html'), notFound: resolve(__dirname, '404.html') },
     },
   },
   test: {

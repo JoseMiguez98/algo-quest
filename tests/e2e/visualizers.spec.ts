@@ -1,9 +1,7 @@
 import { expect, test } from '@playwright/test';
+import { discoverPages } from '../../build/pages-plugin';
 
-const IDS = [
-  'bubble-sort', 'selection-sort', 'insertion-sort', 'shell-sort', 'merge-sort', 'quick-sort', 'heap-sort', 'counting-sort', 'radix-sort', 'bucket-sort',
-  'bfs', 'dfs', 'bidirectional-bfs', 'dijkstra', 'a-star', 'greedy-best-first', 'bellman-ford', 'floyd-warshall', 'backtracking-maze',
-];
+const IDS = discoverPages(process.cwd()).map((p) => p.id);
 
 for (const id of IDS) {
   test(`${id}: runs end to end with the standard controls`, async ({ page }) => {

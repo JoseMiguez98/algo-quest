@@ -1,0 +1,64 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main, dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # Pages hosts one site per repo, so every deploy rebuilds both environments: main at the root, dev under /dev/.
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          path: prod
+      - uses: actions/checkout@v7
+        with:
+          ref: dev
+          path: dev
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: '*/package-lock.json'
+      - name: Build production (main)
+        working-directory: prod
+        env:
+          BASE_PATH: /${{ github.event.repository.name }}/
+          VITE_GOATCOUNTER: ${{ vars.VITE_GOATCOUNTER }}
+        run: npm ci && npm test && npm run build
+      - name: Build dev
+        working-directory: dev
+        env:
+          BASE_PATH: /${{ github.event.repository.name }}/dev/
+          VITE_ENV: dev
+        run: npm ci && npm test && npm run build
+      - run: |
+          mkdir -p site/dev
+          cp -R prod/dist/. site/
+          cp -R dev/dist/. site/dev/
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
