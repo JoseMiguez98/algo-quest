@@ -1,20 +1,61 @@
-# Algo Quest
+<div align="center">
 
+# 🎮 Algo Quest
+
+**Un visualizer y playground de algoritmos de computer science, con alma de consola de 16 bits.**
+
+[![Jugar ahora](https://img.shields.io/badge/▶_jugar_ahora-josemiguez98.github.io-ffd800?style=for-the-badge&labelColor=000024)](https://josemiguez98.github.io/algo-quest/)
+
+[![GitHub stars](https://img.shields.io/github/stars/JoseMiguez98/algo-quest?style=flat&logo=github&label=stars)](https://github.com/JoseMiguez98/algo-quest/stargazers)
 [![CI](https://github.com/JoseMiguez98/algo-quest/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/JoseMiguez98/algo-quest/actions/workflows/ci.yml)
 [![Deploy](https://github.com/JoseMiguez98/algo-quest/actions/workflows/deploy.yml/badge.svg)](https://github.com/JoseMiguez98/algo-quest/actions/workflows/deploy.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+<br>
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white)](tsconfig.json)
+[![Runtime dependencies: 0](https://img.shields.io/badge/runtime_deps-0-brightgreen)](package.json)
+[![Assets: 100% code](https://img.shields.io/badge/assets-100%25_c%C3%B3digo-ff5ed1)](#-hecho-100--con-código)
+[![PRs welcome](https://img.shields.io/badge/PRs-bienvenidos-brightgreen)](CONTRIBUTING.md)
+[![AI agents ready](https://img.shields.io/badge/AI_agents-ready-8a2be2)](AGENTS.md)
 
-Un visualizer y playground de algoritmos de computer science. Mirá paso a paso cómo ordenan los sorts y cómo
-recorren los algoritmos de grafos. Podés adelantar, retroceder y seguir el pseudocódigo línea por línea.
+<img src="docs/media/demo.gif" alt="Heap Sort animándose paso a paso en el theme Mega Drive, con el pseudocódigo resaltado al costado" width="800">
 
-Después meté mano:
-- editá los datos;
-- armá tus propios grafos y laberintos;
-- hacé correr dos algoritmos cara a cara con la misma entrada.
+**[Jugar](https://josemiguez98.github.io/algo-quest/)** · **[Contribuir](CONTRIBUTING.md)** · **[Reportar un bug](https://github.com/JoseMiguez98/algo-quest/issues/new?template=bug.yml)** · **[Pedir un algoritmo](https://github.com/JoseMiguez98/algo-quest/issues/new?template=new-algorithm.yml)**
 
-Todo con estética de consola de 16 bits y sonido sintetizado por código.
+</div>
 
-**Jugalo en https://josemiguez98.github.io/algo-quest/**. La versión en desarrollo (rama `dev`) está en [`/dev/`](https://josemiguez98.github.io/algo-quest/dev/).
+> [!TIP]
+> ⭐ **¿Te gusta Algo Quest? Dejale una estrella al repo.** Es gratis, ayuda a que más gente lo encuentre y nos
+> motiva a sumar algoritmos nuevos.
+
+## ✨ Qué podés hacer
+
+Mirá paso a paso cómo ordenan los sorts y cómo recorren los algoritmos de grafos. Después meté mano.
+
+- 🔍 **Paso a paso, hacia adelante y hacia atrás.** Cada comparación se ve, se escucha y se explica en una narración.
+- 📜 **Pseudocódigo en vivo.** La línea que se está ejecutando se resalta, junto a las variables del momento.
+- 🧪 **Playground.** Editá los datos, arrastrá barras, armá tus propios grafos y laberintos, y compartilos por URL.
+- ⚔️ **Modo versus.** Dos algoritmos con la misma entrada, cara a cara, con marcador en vivo.
+- 🕹️ **Tres estilos.** Mega Drive, RPG de 8 bits y Moderno, cada uno con su propio sonido sintetizado.
+- 🌎 **Español e inglés**, navegable con teclado y auditado con axe (WCAG AA).
+
+**19 algoritmos** en dos mundos:
+
+| Mundo | Algoritmos |
+|---|---|
+| 1 · Ordenamiento | Bubble · Selection · Insertion · Shell · Merge · Quick · Heap · Counting · Radix · Bucket |
+| 2 · Grafos y recorridos | BFS · DFS · BFS bidireccional · Dijkstra · A* · Greedy best-first · Bellman-Ford · Floyd-Warshall · Backtracking (laberinto) |
+
+## 📸 Capturas
+
+| Portada | Quick Sort |
+|---|---|
+| <img src="docs/media/home.png" alt="Portada con el logo de Algo Quest y una demo de Floyd-Warshall" width="420"> | <img src="docs/media/sorting.png" alt="Quick Sort en plena partición, con el pseudocódigo resaltado" width="420"> |
+| **A\*** | **Modo versus** |
+| <img src="docs/media/graph.png" alt="A* explorando un grafo con los valores g+h sobre cada nodo" width="420"> | <img src="docs/media/compare.png" alt="Bubble Sort contra Quick Sort con los mismos datos" width="420"> |
+| **Playground** | **Mobile** |
+| <img src="docs/media/playground.png" alt="Editor de grafos de Dijkstra con herramientas para mover nodos y aristas" width="420"> | <img src="docs/media/mobile.png" alt="Merge Sort en un teléfono, con los controles tipo gamepad" width="200"> |
+
+## 🚀 Correrlo en tu máquina
 
 ```bash
 npm install
@@ -28,12 +69,12 @@ Para publicar en una subcarpeta (por ejemplo GitHub Pages en `/algo-quest/`): `B
 El deploy lo hace `.github/workflows/deploy.yml` en cada push a `main` o a `dev`.
 El resultado en `dist/` es 100 % estático: una página por algoritmo (`/sorting/quick-sort/`), la portada y `/compare/`.
 
-## Hecho 100 % con código
+## 🧱 Hecho 100 % con código
 
 **No hay librerías en runtime.** `package.json` no tiene `dependencies`: el sitio es TypeScript vanilla. Vite,
 Vitest, Playwright y compañía son herramientas de build y de test, y no llegan al navegador.
 
-**No hay ni un archivo de imagen ni de audio.** Todo lo que ves y escuchás se genera en el momento:
+**El sitio no trae ni un archivo de imagen ni de audio.** Todo lo que ves y escuchás se genera en el momento. Las capturas de `docs/media/` existen solo para este README y no se publican con el sitio.
 
 | Qué | Cómo se hace |
 |---|---|
@@ -45,11 +86,11 @@ Vitest, Playwright y compañía son herramientas de build y de test, y no llegan
 
 **Recursos externos**, a la vista:
 - Las tipografías de la interfaz (Press Start 2P, Pixelify Sans e Inter, todas con licencia OFL) se cargan desde Google Fonts.
-- En producción se carga el contador de [GoatCounter](#métricas).
+- En producción se carga el contador de [GoatCounter](#-métricas).
 
 Esa regla vale también para los aportes: nada de dependencias en runtime ni de archivos de assets.
 
-## Cómo está organizado
+## 🗂️ Cómo está organizado
 
 | Carpeta | Qué hay |
 |---|---|
@@ -66,7 +107,7 @@ La regla central: **los algoritmos solo emiten eventos semánticos** (`compare`,
 snapshot inmutable del estado. Nunca conocen colores, sonidos ni el DOM. Las escenas traducen el estado a primitivas
 (`bar`, `node`, `edge`…), y el theme decide cómo se ve y suena cada una.
 
-## Contribuir con AI agents
+## 🤖 Contribuir con AI agents
 
 Algo Quest está pensado para contribuir **trabajando junto a un AI agent**. El repo trae las instrucciones que el
 agente necesita, así que cualquiera que colabore sigue los mismos pasos, las mismas reglas y la misma vara de calidad:
@@ -90,18 +131,38 @@ Cómo empezar:
 Si encontrás un paso que el agente no supo resolver, **mejorar la skill también es un aporte**: así el próximo
 colaborador no se choca con lo mismo.
 
-## Métricas
+## 📊 Métricas
 
 El sitio publicado cuenta visitas y eventos de uso (play, paso atrás, edición, comparaciones) con
 [GoatCounter](https://www.goatcounter.com/). GoatCounter no usa cookies ni datos personales, y respeta *Do Not Track*.
 Solo se activa en producción cuando existe la variable `VITE_GOATCOUNTER`; ni en local ni en `/dev/` se envía nada.
 El código está en `src/core/analytics.ts`.
 
-## Atajos de teclado
+## ⌨️ Atajos de teclado
 
 `Espacio` play/pausa · `→`/`←` paso · `Home`/`End` inicio/fin · `R` reiniciar · `N` datos nuevos · `+`/`−` velocidad ·
 `M` sonido · `E` modo edición · `C` código · `I` info · `?` ayuda · `Esc` cerrar.
 
-## Licencia
+## 💜 Colaboradores
+
+Gracias a todas las personas que suman algoritmos, themes, traducciones y fixes.
+
+<a href="https://github.com/JoseMiguez98/algo-quest/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=JoseMiguez98/algo-quest" alt="Colaboradores de Algo Quest">
+</a>
+
+## ⭐ Historial de estrellas
+
+<a href="https://star-history.com/#JoseMiguez98/algo-quest&Date">
+  <img src="https://api.star-history.com/svg?repos=JoseMiguez98/algo-quest&type=Date" alt="Gráfico del historial de estrellas" width="600">
+</a>
+
+## 📄 Licencia
 
 [MIT](LICENSE) © 2026 JoseMiguez98
+
+<div align="center">
+
+**Si Algo Quest te sirvió o te divirtió, ⭐ dejale una estrella: es la mejor forma de apoyar el proyecto.**
+
+</div>

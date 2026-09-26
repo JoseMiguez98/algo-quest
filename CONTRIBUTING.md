@@ -1,4 +1,9 @@
-# Cómo contribuir a Algo Quest
+# 🤝 Cómo contribuir a Algo Quest
+
+[![PRs welcome](https://img.shields.io/badge/PRs-bienvenidos-brightgreen)](#-checklist-del-pr)
+[![AI agents ready](https://img.shields.io/badge/AI_agents-ready-8a2be2)](AGENTS.md)
+[![Runtime dependencies: 0](https://img.shields.io/badge/runtime_deps-0-brightgreen)](package.json)
+[![Good first issues](https://img.shields.io/github/issues/JoseMiguez98/algo-quest/good%20first%20issue?label=good%20first%20issues&color=7057ff)](https://github.com/JoseMiguez98/algo-quest/labels/good%20first%20issue)
 
 > **English summary.** Algo Quest is a visualizer and playground for computer science algorithms, and **it is built to be extended with AI agents**.
 >
@@ -14,7 +19,14 @@
 
 ¡Gracias por sumarte! Podés aportar de muchas formas: un algoritmo nuevo, un theme, una traducción, un bug, una referencia mejor o una explicación más clara.
 
-## Contribuir con un AI agent
+> [!TIP]
+> ⭐ **Si todavía no lo hiciste, dejale una estrella al repo.** Ayuda a que más gente encuentre el proyecto, y más
+> gente significa más algoritmos y más themes.
+>
+> ¿Buscás por dónde empezar? Mirá los issues con la etiqueta
+> [`good first issue`](https://github.com/JoseMiguez98/algo-quest/labels/good%20first%20issue).
+
+## 🤖 Contribuir con un AI agent
 
 Este repo está pensado para que contribuyas **trabajando junto a un AI agent**. El objetivo es que todos sigamos los mismos pasos y la misma vara de calidad, sin importar quién escriba el código.
 
@@ -38,13 +50,13 @@ Este repo está pensado para que contribuyas **trabajando junto a un AI agent**.
 
 Sin agente también podés contribuir: las skills se leen como checklists comunes.
 
-## Antes de empezar
+## 🧭 Antes de empezar
 
 - Para cambios grandes (una categoría nueva, un theme, cambios de arquitectura), abrí primero un issue con la plantilla correspondiente. Así acordamos el enfoque antes de que inviertas tiempo.
 - Para algo chico (un typo, un bug evidente), mandá el PR directamente.
 - Al participar aceptás el [Código de Conducta](CODE_OF_CONDUCT.md).
 
-## Preparar el entorno
+## 🛠️ Preparar el entorno
 
 Requiere Node 20 o superior.
 
@@ -64,7 +76,7 @@ npm run dev                       # http://localhost:5180
 | `npm run typecheck` | TypeScript estricto |
 | `npm run build` | Sitio estático en `dist/` |
 
-## La arquitectura en una línea
+## 🏗️ La arquitectura en una línea
 
 **Los algoritmos solo emiten eventos semánticos** (`compare`, `swap`, `visit`, `relax`…) con un snapshot inmutable del estado. Nunca conocen colores, sonidos ni el DOM.
 
@@ -72,9 +84,9 @@ A partir de esos eventos:
 - las escenas (`src/scenes/`) traducen el estado a primitivas;
 - el theme (`src/themes/`) decide cómo se ve y cómo suena cada una.
 
-El mapa completo de carpetas está en el [README](README.md#cómo-está-organizado).
+El mapa completo de carpetas está en el [README](README.md).
 
-## Todo se hace con código
+## 🧱 Todo se hace con código
 
 Algo Quest no tiene librerías en runtime ni archivos de assets. Los aportes tienen que respetar lo mismo:
 
@@ -88,9 +100,9 @@ Algo Quest no tiene librerías en runtime ni archivos de assets. Los aportes tie
 | MP3 o WAV | Cues del `SoundPack` sintetizados con Web Audio |
 | Música grabada | Un `MusicTrack` procedural |
 
-Las únicas excepciones son las tipografías de la interfaz desde Google Fonts (con licencia OFL) y el contador de GoatCounter en producción.
+Las únicas excepciones son las tipografías de la interfaz desde Google Fonts (con licencia OFL) y el contador de GoatCounter en producción. Las capturas y GIFs de `docs/media/` sirven solo para documentar en el README y nunca se importan desde `src/`.
 
-## La vara de exactitud
+## 🎯 La vara de exactitud
 
 Es un sitio para aprender, así que un algoritmo mal mostrado es peor que ninguno. Para que se acepte un algoritmo:
 
@@ -106,7 +118,7 @@ Es un sitio para aprender, así que un algoritmo mal mostrado es peor que ningun
 
 Nunca se debilita un test para que pase: se corrige el algoritmo.
 
-## Agregar un algoritmo
+## ➕ Agregar un algoritmo
 
 Seguí el checklist de [`.claude/skills/add-algorithm/SKILL.md`](.claude/skills/add-algorithm/SKILL.md). Resumen:
 
@@ -122,7 +134,7 @@ Si usás [Claude Code](https://claude.com/claude-code), pedile "agregá el algor
 
 Para una **categoría nueva** (árboles, strings, geometría…), abrí primero un issue: la skill lista todo lo que hay que tocar.
 
-## Agregar un theme
+## 🎨 Agregar un theme
 
 Seguí [`.claude/skills/add-theme/SKILL.md`](.claude/skills/add-theme/SKILL.md). Un theme implementa `Theme` (`src/themes/contract.ts`) y tiene cuatro partes:
 
@@ -133,7 +145,7 @@ Seguí [`.claude/skills/add-theme/SKILL.md`](.claude/skills/add-theme/SKILL.md).
 
 Tiene que pasar la auditoría de accesibilidad (`tests/e2e/a11y.spec.ts`) sin violaciones, incluido el contraste AA.
 
-## Contenido y traducciones
+## 🌎 Contenido y traducciones
 
 - Todo texto visible existe en **español y en inglés**.
   - La UI está en `src/i18n/`.
@@ -143,7 +155,7 @@ Tiene que pasar la auditoría de accesibilidad (`tests/e2e/a11y.spec.ts`) sin vi
 - Cada algoritmo cita **2–3 referencias que abriste y verificaste**: Wikipedia, CLRS o Sedgewick, cp-algorithms, VisuAlgo. No se inventan URLs.
 - Las narraciones explican el *por qué* de cada paso, no solo el *qué*: "7 > 3 → se intercambian".
 
-## Ramas, commits y PRs
+## 🌿 Ramas, commits y PRs
 
 El detalle está en [`.claude/skills/contribute/SKILL.md`](.claude/skills/contribute/SKILL.md).
 
@@ -164,7 +176,7 @@ El detalle está en [`.claude/skills/contribute/SKILL.md`](.claude/skills/contri
 
 **Merge:** con el CI en verde, el PR se mergea con squash. Un maintainer después promueve `dev` a `main`.
 
-### Checklist del PR
+### ✅ Checklist del PR
 
 - [ ] `npm run typecheck && npm test && npm run e2e && npm run build` pasan.
 - [ ] Sin dependencias en runtime nuevas y sin archivos de imagen o audio.
@@ -174,13 +186,13 @@ El detalle está en [`.claude/skills/contribute/SKILL.md`](.claude/skills/contri
 - [ ] Captura o GIF si cambia algo visual.
 - [ ] Probado a mano en escritorio y mobile (~390 px).
 
-## Estilo de código
+## ✍️ Estilo de código
 
 - **TypeScript estricto** (`noUncheckedIndexedAccess`) y sin `any` salvo que esté justificado.
 - **Nombres claros antes que comentarios.** Comentá solo lo que alguien entendería mal sin el comentario (un invariante, un workaround), en una línea.
 - **Imitá el código de al lado:** mismo idioma, mismos helpers (`h()` para DOM, `ui.*` para componentes) y cero dependencias nuevas sin discutirlo antes.
 - **Accesibilidad:** todo control es un elemento DOM real con foco visible, las animaciones respetan `prefers-reduced-motion` y el canvas tiene `aria-label`.
 
-## Licencia
+## 📄 Licencia
 
 Al contribuir aceptás que tu aporte se publique bajo la [licencia MIT](LICENSE) del proyecto.
