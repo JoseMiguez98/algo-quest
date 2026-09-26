@@ -31,7 +31,7 @@ Orden de vecinos documentado: grillas en sentido horario desde la derecha (→ �
 | DFS | Recursivo, marca al entrar | CLRS 22.3 | preorden = referencia, tiempos de descubrimiento/fin anidados, camino = pila de recursión |
 | BFS bidireccional | Capa completa por turno (alternado u opción "frontera menor"), mejor encuentro de la capa | Pohl 1971 | longitud = BFS en grafos dirigidos y no dirigidos, ambos modos |
 | Dijkstra | Heap binario con borrado perezoso; nodos finales se omiten | CLRS 24.3 | distancias = referencia O(V²), finaliza en orden no decreciente, nunca relaja nodos finales |
-| A* | f = g + h, desempate por h, cierre al extraer | Hart, Nilsson, Raphael 1968 | óptimo con h admisible y consistente (euclídea/Manhattan), expande ≤ Dijkstra, A* ponderado da camino válido |
+| A* | f = g + h, desempate por h, cierre al extraer; h = s·d(u,t) con s = min(1, min w/d) → consistente en cualquier grafo con pesos positivos | Hart, Nilsson, Raphael 1968 | óptimo en grafos arbitrarios (euclídea/Manhattan), expande ≤ Dijkstra en grafos métricos, A* ponderado da camino válido |
 | Greedy best-first | Prioridad h, sin reapertura | Russell & Norvig 3.5 | camino válido si existe, costo ≥ óptimo, dataset trampa subóptimo |
 | Bellman-Ford | V−1 pasadas, salida temprana, pasada de detección | CLRS 24.1 | = Dijkstra sin negativos, = Floyd con negativos, ciclo extraído existe y pesa < 0 |
 | Floyd-Warshall | k exterior, matriz `next` para reconstrucción | CLRS 25.2 | = V × Dijkstra, exactamente V³ chequeos, caminos reconstruidos óptimos, diagonal negativa = ciclo |

@@ -1,9 +1,8 @@
-import { euclidean, findEdge, gridGraph, manhattan } from '../algorithms/graph/model';
+import { findEdge, gridGraph } from '../algorithms/graph/model';
 import type { GraphInput, GraphState } from '../algorithms/graph/types';
 import type { AlgorithmDef, GraphInputSpec } from '../core/algorithm';
 import { mulberry32 } from '../core/rng';
 import { sound } from '../core/sound';
-import type { Primitive } from '../core/types';
 import { defaultWeight, generatorsFor, gridInput, nextLabel, randomGraph, withNegativeCycle, type GraphGenerator } from '../data/generators';
 import { legacyGraphs } from '../data/legacy-graphs';
 import { t } from '../i18n';
@@ -17,7 +16,7 @@ type Tool = 'move' | 'node' | 'edge' | 'erase' | 'start' | 'target' | 'wall';
 
 const clone = (i: GraphInput): GraphInput => structuredClone(i);
 
-export function createGraphEditor(def: AlgorithmDef<never>, initial: GraphInput, options: () => Record<string, Primitive>, host: EditorHost): Editor {
+export function createGraphEditor(def: AlgorithmDef<never>, initial: GraphInput, host: EditorHost): Editor {
   const spec = def.input as GraphInputSpec;
   let input = clone(initial);
   let stage: Stage | null = null;
@@ -61,14 +60,6 @@ export function createGraphEditor(def: AlgorithmDef<never>, initial: GraphInput,
     const w: string[] = [];
     const g = input.graph;
     if (spec.maxNodes && g.nodes.length > spec.maxNodes) w.push(t('edit.tooMany', { n: spec.maxNodes }));
-    if (def.id === 'a-star' && input.target !== null && Number(options().weight ?? 1) === 1) {
-      const kind = options().heuristic ?? (g.grid ? 'manhattan' : 'euclidean');
-      if (kind !== 'zero') {
-        const hf = (u: number) => (kind === 'manhattan' ? manhattan : euclidean)(g, u, input.target!);
-        const bad = g.edges.some((e) => hf(e.from) > e.weight + hf(e.to) + 1e-9 || (!g.directed && hf(e.to) > e.weight + hf(e.from) + 1e-9));
-        if (bad) w.push(t('edit.inconsistent'));
-      }
-    }
     if (def.id === 'dijkstra' && g.edges.some((e) => e.weight < 0)) w.push(t('edit.negative'));
     warnings.replaceChildren(...w.map((m) => ui.chip(m, 'warn')));
   }

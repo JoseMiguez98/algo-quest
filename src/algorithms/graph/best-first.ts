@@ -24,13 +24,30 @@ export interface BestFirstExtra {
 
 export type Mode = 'dijkstra' | 'a-star' | 'greedy';
 
+/**
+ * Straight-line (or Manhattan) distance to the target, scaled by s = min(1, min w(u,v) / d(u,v)).
+ * Then h(u) = s·d(u,t) ≤ s·d(u,v) + s·d(v,t) ≤ w(u,v) + h(v): consistent on any positive-weight graph,
+ * even when node coordinates are not in weight units. A weight > 1 deliberately breaks that (weighted A*).
+ */
 export function heuristicFn(kind: Heuristic, graph: Graph, target: number | null, weight = 1): (u: number) => number {
   if (kind === 'zero' || target === null) return () => 0;
   const base = kind === 'manhattan' ? manhattan : euclidean;
-  return (u) => round(weight * base(graph, u, target));
+  const s = heuristicScale(graph, base);
+  return (u) => round(weight * s * base(graph, u, target));
 }
 
-const round = (x: number) => Math.round(x * 100) / 100;
+export function heuristicScale(graph: Graph, base: (g: Graph, a: number, b: number) => number): number {
+  let s = 1;
+  for (const e of graph.edges) {
+    if (e.weight <= 0) return 0;
+    const d = base(graph, e.from, e.to);
+    if (d > 0) s = Math.min(s, e.weight / d);
+  }
+  return s;
+}
+
+/** Floors to 2 decimals so rounding can never push h above the consistent bound. */
+const round = (x: number) => Math.floor(x * 100 + 1e-9) / 100;
 
 /**
  * Shared skeleton for Dijkstra (priority g), A* (g + h) and greedy best-first (h).

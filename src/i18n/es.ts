@@ -48,7 +48,6 @@ export default {
   'edit.share': 'Copiar enlace',
   'edit.copied': 'Enlace copiado',
   'edit.tooMany': 'Este algoritmo admite hasta {n} nodos.',
-  'edit.inconsistent': 'Hay aristas más cortas que la heurística: A* puede dejar de encontrar el óptimo.',
   'edit.negative': 'Hay pesos negativos: Dijkstra puede dar distancias incorrectas.',
   'tool.move': 'Mover',
   'tool.node': 'Nodo',

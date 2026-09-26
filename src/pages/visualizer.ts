@@ -230,7 +230,7 @@ async function mount(root: HTMLElement): Promise<void> {
       const host = { changed: preview, rebuilt: preview };
       editor = def!.input.kind === 'array'
         ? createArrayEditor(def!.input, input as number[], host)
-        : createGraphEditor(def!, input as GraphInput, () => options, host);
+        : createGraphEditor(def!, input as GraphInput, host);
       editPanel.replaceChildren(editor.tools);
       editPanel.hidden = false;
       app.classList.add('is-editing');

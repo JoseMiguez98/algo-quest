@@ -10,7 +10,7 @@ const content: AlgorithmContent = {
     'Extract the node with the lowest f (ties go to the lower h); if it is already in CLOSED it is a stale entry, skip it.',
     'Move it to CLOSED (if it is the target, you are done).',
     'For each neighbour not in CLOSED: if g[u] + w < g[v], update g[v] and its parent, and push it into OPEN with f = g[v] + h(v).',
-    'The default heuristic is Euclidean on free graphs and Manhattan on grids: admissible and consistent when every weight is ≥ the distance it covers.',
+    'h is the Euclidean (free graphs) or Manhattan (grids) distance, shrunk just enough that no edge is shorter than it: that keeps h consistent on any graph.',
   ],
   whenToUse:
     'Finding a path between two points when you can estimate the remaining distance: game pathfinding, robotics, maps and navigation. With h = 0 it becomes Dijkstra; with weight > 1 it trades optimality for speed.',

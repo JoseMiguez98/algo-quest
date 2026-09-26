@@ -10,7 +10,7 @@ const content: AlgorithmContent = {
     'Sacá el nodo de menor f (a igual f, el de menor h); si ya está en CLOSED es una entrada vieja y se descarta.',
     'Pasalo a CLOSED (si es el destino, terminaste).',
     'Para cada vecino fuera de CLOSED: si g[u] + w < g[v], actualizá g[v] y su padre, e insertalo en OPEN con f = g[v] + h(v).',
-    'La heurística por defecto es euclidiana en grafos libres y Manhattan en grillas: admisibles y consistentes si cada peso es ≥ la distancia que cubre.',
+    'h es la distancia euclidiana (grafos libres) o Manhattan (grillas), achicada lo justo para que ninguna arista sea más corta que ella: así h es consistente en cualquier grafo.',
   ],
   whenToUse:
     'Buscar un camino entre dos puntos cuando podés estimar la distancia al destino: pathfinding en videojuegos, robótica, mapas y navegación. Con h = 0 se vuelve Dijkstra; con peso > 1 gana velocidad a costa de la optimalidad.',
