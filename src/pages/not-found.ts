@@ -7,6 +7,7 @@ import { t } from '../i18n';
 import { applyTheme } from '../themes';
 import { ui } from '../ui/components';
 import { h } from '../ui/dom';
+import { createSiteFooter } from '../ui/site-footer';
 
 function mount(root: HTMLElement): void {
   applyTheme();
@@ -21,7 +22,7 @@ function mount(root: HTMLElement): void {
       h('p', {}, t('notFound.body', { path: location.pathname })),
       home,
     ),
-  ));
+  ), createSiteFooter());
   home.focus();
 }
 

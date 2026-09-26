@@ -130,3 +130,4 @@ a { color: var(--color-accent); text-underline-offset: 3px; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+.site-footer { font-size: 13px; }
