@@ -16,11 +16,20 @@ export class GraphScene implements Scene<S> {
   readonly minWidth = 220;
   readonly maxWidth = 720;
 
-  constructor(private readonly input: GraphInput) {}
+  constructor(
+    private readonly input: GraphInput,
+    private readonly layers: readonly string[] = [],
+  ) {}
 
   draw(r: StageRenderer, f: SceneFrame<S>): void {
-    if (this.input.graph.grid) this.drawGrid(r, f);
-    else this.drawFree(r, f);
+    if (this.input.graph.grid) return this.drawGrid(r, f);
+    if (this.layers.includes('matrix')) {
+      const split = Math.round(f.width * 0.46);
+      this.drawFree(r, { ...f, width: split });
+      drawMatrix(r, f, this.input, split, f.width - split);
+      return;
+    }
+    this.drawFree(r, f);
   }
 
   private place(g: Graph, width: number, height: number, pad: number): Placed[] {
@@ -90,3 +99,38 @@ export class GraphScene implements Scene<S> {
 }
 
 const rank = (m: string | null): number => (m === null ? 0 : m === 'rejected' ? 1 : m === 'tree' || m === 'tree-b' ? 2 : 3);
+
+interface MatrixExtra {
+  dist: number[][];
+  k: number | null;
+  i: number | null;
+  j: number | null;
+  updated: [number, number] | null;
+}
+
+function drawMatrix(r: StageRenderer, f: SceneFrame<S>, input: GraphInput, x0: number, w: number): void {
+  const x = f.step.state.extra as unknown as MatrixExtra;
+  const n = x.dist.length;
+  const labels = input.graph.nodes.map((nd) => nd.label);
+  const cell = Math.max(12, Math.min(22, Math.floor((Math.min(w - 16, f.height - 24)) / (n + 1))));
+  const left = x0 + Math.round((w - cell * (n + 1)) / 2);
+  const top = Math.round((f.height - cell * (n + 1)) / 2);
+  const fmtCell = (d: number) => (d === Infinity ? '∞' : String(d));
+  for (let c = 0; c < n; c++) {
+    const on = c === x.j || c === x.k;
+    r.text(labels[c]!, left + cell * (c + 1) + cell / 2 + 1, top + (cell - 7) / 2, { align: 'center', color: c === x.k ? r.color('current') : c === x.j ? r.color('frontier-b') : undefined, tone: on ? 'normal' : 'muted' });
+  }
+  for (let row = 0; row < n; row++) {
+    const y = top + cell * (row + 1);
+    r.text(labels[row]!, left + cell / 2 + 1, y + (cell - 7) / 2, { align: 'center', color: row === x.k ? r.color('current') : row === x.i ? r.color('frontier') : undefined, tone: row === x.i || row === x.k ? 'normal' : 'muted' });
+    for (let c = 0; c < n; c++) {
+      const d = x.dist[row]![c]!;
+      let state: VisualState | 'open' = 'open';
+      if (row === c && d < 0) state = 'cycle';
+      else if (x.updated && x.updated[0] === row && x.updated[1] === c) state = 'write';
+      else if (row === x.i && c === x.j) state = 'active';
+      else if ((row === x.i && c === x.k) || (row === x.k && c === x.j)) state = 'compare';
+      r.cell(left + cell * (c + 1), y, cell, state, fmtCell(d));
+    }
+  }
+}

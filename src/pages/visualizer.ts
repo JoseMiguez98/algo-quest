@@ -9,11 +9,14 @@ import { mulberry32, randomInt } from '../core/rng';
 import { settings } from '../core/settings';
 import { sound } from '../core/sound';
 import { record } from '../core/trace';
-import type { Step } from '../core/types';
+import type { Primitive, Step } from '../core/types';
 import { t } from '../i18n';
 import { BarsScene } from '../scenes/bars';
 import { GraphScene } from '../scenes/graph';
-import type { Scene } from '../scenes/scene';
+import type { Scene, SceneFrame } from '../scenes/scene';
+import { BAR_LAYERS } from '../scenes/layers';
+import type { ArrayState } from '../algorithms/sorting/types';
+import type { RadixExtra } from '../algorithms/sorting/radix-sort/algorithm';
 import { Stage } from '../scenes/stage';
 import { allThemes, applyTheme, stageRenderer } from '../themes';
 import { setButtonIcon, ui } from '../ui/components';
@@ -37,22 +40,35 @@ function resolveId(): string {
   return parts.at(-1) ?? algorithms[0]!.id;
 }
 
-function initialInput(def: Def, seed: number | null): unknown {
+function defaultOptions(def: Def): Record<string, Primitive> {
+  return Object.fromEntries((def.options ?? []).map((o) => [o.id, o.default]));
+}
+
+function initialInput(def: Def, seed: number | null, fixture?: string): unknown {
   if (def.input.kind === 'array') {
     const spec = def.input;
     if (seed === null) return spec.preset.slice();
     const rng = mulberry32(seed);
     return spec.preset.map(() => randomInt(rng, spec.min, spec.max));
   }
-  const f = legacyGraphs[def.input.fixture];
-  if (!f) throw new Error(`unknown fixture ${def.input.fixture}`);
+  const f = legacyGraphs[fixture ?? def.input.fixture];
+  if (!f) throw new Error(`unknown fixture ${fixture ?? def.input.fixture}`);
   return { graph: f.graph, start: f.start, target: def.input.needsTarget ? f.target : f.target } satisfies GraphInput;
 }
 
 function sceneFor(def: Def, input: unknown): Scene<unknown> {
-  if (def.scene === 'graph') return new GraphScene(input as GraphInput) as Scene<unknown>;
+  if (def.scene === 'graph') return new GraphScene(input as GraphInput, def.layers ?? []) as Scene<unknown>;
   const spec = def.input.kind === 'array' ? def.input : null;
-  return new BarsScene([], spec?.max) as Scene<unknown>;
+  const layers = (def.layers ?? []).flatMap((id) => (BAR_LAYERS[id] ? [BAR_LAYERS[id]] : []));
+  const label = def.layers?.includes('digits') ? radixLabel : undefined;
+  return new BarsScene(layers, { maxValue: spec?.max, label }) as Scene<unknown>;
+}
+
+function radixLabel(value: number, f: SceneFrame<ArrayState<unknown>>): { text: string; highlight?: number } {
+  const x = f.step.state.extra as RadixExtra;
+  const text = value.toString(x.base).toUpperCase().padStart(Math.max(1, x.passes), '0');
+  const active = x.pass > 0 && f.step.event !== 'done';
+  return { text, highlight: active ? text.length - x.pass : undefined };
 }
 
 async function mount(root: HTMLElement): Promise<void> {
@@ -67,6 +83,8 @@ async function mount(root: HTMLElement): Promise<void> {
   document.documentElement.lang = settings.get().lang;
 
   let seed: number | null = null;
+  let fixture: string | undefined;
+  const options = defaultOptions(def);
   let input = initialInput(def, seed);
   let steps: Step<unknown>[] = [];
   const player = new Player({ durations: def.durations, speed: settings.get().speed });
@@ -91,9 +109,33 @@ async function mount(root: HTMLElement): Promise<void> {
 
   const shuffleBtn = ui.button({ label: t('data.shuffle'), icon: 'shuffle', shortcut: 'N', onClick: () => shuffle() });
   const presetBtn = ui.button({ label: t('data.preset'), variant: 'ghost', onClick: () => loadInput(null) });
+  const pickers = h('div', { class: 'stage-toolbar__group' });
+  for (const o of def.options ?? []) {
+    const sel = h('select', { class: 'theme-select', 'aria-label': content.options?.[o.id] ?? o.id },
+      ...o.values.map((v) => h('option', { value: String(v), selected: v === options[o.id] }, content.options?.[`${o.id}.${v}`] ?? String(v))));
+    sel.addEventListener('change', () => {
+      options[o.id] = typeof o.default === 'number' ? Number(sel.value) : sel.value;
+      sound.unlock();
+      sound.play('ui-select');
+      loadInput(seed);
+    });
+    pickers.append(h('label', { class: 'picker' }, h('span', { class: 'picker__label' }, content.options?.[o.id] ?? o.id), sel));
+  }
+  if (def.input.kind === 'graph' && def.input.alternatives?.length) {
+    const ids = [def.input.fixture, ...def.input.alternatives];
+    const sel = h('select', { class: 'theme-select', 'aria-label': t('data.dataset') },
+      ...ids.map((id, i) => h('option', { value: id }, i === 0 ? t('data.classic') : t(id.endsWith('negative-cycle') ? 'data.negativeCycle' : 'data.classic'))));
+    sel.addEventListener('change', () => {
+      fixture = sel.value;
+      sound.unlock();
+      sound.play('ui-select');
+      loadInput(null);
+    });
+    pickers.append(h('label', { class: 'picker' }, h('span', { class: 'picker__label' }, t('data.dataset')), sel));
+  }
   const toolbar = h('div', { class: 'stage-toolbar' },
     stats.live,
-    def.input.kind === 'array' ? h('div', { class: 'stage-toolbar__group' }, shuffleBtn, presetBtn) : null,
+    h('div', { class: 'stage-toolbar__group' }, pickers, def.input.kind === 'array' ? shuffleBtn : null, def.input.kind === 'array' ? presetBtn : null),
   );
   const stageWindow = ui.window(null, toolbar, stageHost, stats.strip, narrationBox, legend);
   stageWindow.classList.add('stage-window');
@@ -186,9 +228,9 @@ async function mount(root: HTMLElement): Promise<void> {
 
   function loadInput(nextSeed: number | null): void {
     seed = nextSeed;
-    input = initialInput(def!, seed);
+    input = initialInput(def!, seed, fixture);
     try {
-      steps = record(def!.run(input as never, {}));
+      steps = record(def!.run(input as never, options));
     } catch (e) {
       narration.textContent = t('error.input', { msg: (e as Error).message });
       return;
