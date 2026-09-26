@@ -10,6 +10,8 @@ Algo Quest is educational: **accuracy beats everything**. An algorithm is done o
 
 The central rule: an algorithm only emits semantic events (`compare`, `swap`, `visit`, `relax`…) with an immutable snapshot. It never knows about colors, sounds or the DOM.
 
+Also read `AGENTS.md`. In particular: **no runtime dependencies and no asset files**. A new visual is a scene layer drawn with `StageRenderer` primitives, never an image. A new sound is a cue override (`cues`), never an audio file.
+
 ## 0. Decide before writing code
 
 1. Check `src/algorithms/registry.ts` so it doesn't already exist. The id is a kebab-case slug with no suffix (`comb-sort`, `prim`).
@@ -101,6 +103,10 @@ Then open `http://localhost:5180/<cat>/<id>/` (`npm run dev`) and check:
 - `/compare/?a=<id>&b=<other>` works.
 
 Report what you checked. If something could not be verified, say so.
+
+## 7. Keep this skill current
+
+If a step here was wrong, missing or ambiguous, fix this file in the same PR. Examples: a file moved, a field was added to `defineAlgorithm`, or a check was missing. The next contributor's agent depends on it.
 
 ## Add a new category
 

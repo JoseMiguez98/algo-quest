@@ -8,6 +8,11 @@ allowed-tools: Read, Write, Edit, Glob, Grep, Bash(npm test*), Bash(npm run *), 
 
 A theme swaps **how everything looks and sounds** without touching algorithms, scenes or UI logic. It is one folder in `src/themes/<id>/` implementing `Theme` from `src/themes/contract.ts`.
 
+**Everything is generated in code.** No image, audio or icon-font files, and no runtime dependencies:
+- Frames, sprites, backgrounds and decorations are SVG strings built with `src/themes/pixel/svg.ts` (`px`, `sprite`, `svgUrl`), exposed through `frames` / CSS variables, or drawn on the canvas by the renderer. See `megadrive/decor.ts`.
+- Sounds and music are Web Audio synthesis.
+- The only external resource a theme may add is a Google Fonts typeface with an OFL license, in `fontUrls`.
+
 Pick the closest existing theme as a template and read all of its files first:
 
 | Template | When |
@@ -67,3 +72,7 @@ Finally, review it by eye with `npm run dev`:
 - Check desktop and ~390 px mobile width.
 - Check keyboard focus rings.
 - Check sound on and off.
+
+## Keep this skill current
+
+If the class list or the contract changed, or a step was missing, update this file in the same PR.

@@ -17,6 +17,8 @@
 - [ ] `npm run typecheck && npm test && npm run e2e && npm run build` pasan
 - [ ] Probado a mano en escritorio y mobile (~390 px)
 - [ ] Captura o GIF si cambia algo visual
+- [ ] Sin dependencias en runtime nuevas ni archivos de imagen o audio: todo se genera con código
+- [ ] Si trabajé con un AI agent: revisé el resultado a mano y actualicé la skill si le faltaba algo
 
 ### Si es un algoritmo
 
