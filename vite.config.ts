@@ -14,5 +14,7 @@ export default defineConfig({
   },
   test: {
     include: ['src/**/*.test.ts'],
+    // Property tests run thousands of cases; shared CI runners are several times slower than a laptop.
+    testTimeout: 30_000,
   },
 });

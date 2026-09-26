@@ -31,6 +31,7 @@ test('array editor: drag a bar, validate typed values, share state through the U
   await expect(page.locator('.transport__count')).toContainText(/\d+\/\d+/);
 
   await page.reload();
+  await expect(page.locator('.transport__count')).toContainText(/1\/\d+/);
   await page.keyboard.press('e');
   await expect(values).toHaveValue('4, 3, 2, 1');
 });
