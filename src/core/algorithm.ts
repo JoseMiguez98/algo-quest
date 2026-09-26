@@ -25,6 +25,8 @@ export interface GraphInputSpec {
   directed?: boolean;
   negativeWeights?: boolean;
   gridOnly?: boolean;
+  /** Upper bound on nodes the editor allows (keeps traces within MAX_STEPS). */
+  maxNodes?: number;
 }
 
 export interface OptionSpec {

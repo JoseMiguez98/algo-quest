@@ -16,6 +16,50 @@ export class GraphScene implements Scene<S> {
   readonly minWidth = 220;
   readonly maxWidth = 720;
 
+  /** Node positions and graph↔stage mapping of the last frame, for the editor. */
+  positions: Placed[] = [];
+  private map = { s: 1, ox: 0, oy: 0, minX: 0, minY: 0 };
+  private gridBox = { ox: 0, oy: 0, size: 1 };
+
+  nodeAt(x: number, y: number, radius = 9): number | null {
+    let best: number | null = null;
+    let bestD = radius;
+    this.positions.forEach((p, i) => {
+      const d = Math.hypot(p.x - x, p.y - y);
+      if (d <= bestD) { bestD = d; best = i; }
+    });
+    return best;
+  }
+
+  edgeAt(x: number, y: number, tolerance = 4): number | null {
+    let best: number | null = null;
+    let bestD = tolerance;
+    this.input.graph.edges.forEach((e, i) => {
+      const a = this.positions[e.from];
+      const b = this.positions[e.to];
+      if (!a || !b) return;
+      const len2 = (b.x - a.x) ** 2 + (b.y - a.y) ** 2 || 1;
+      const t = Math.max(0, Math.min(1, ((x - a.x) * (b.x - a.x) + (y - a.y) * (b.y - a.y)) / len2));
+      const d = Math.hypot(x - (a.x + t * (b.x - a.x)), y - (a.y + t * (b.y - a.y)));
+      if (d < bestD) { bestD = d; best = i; }
+    });
+    return best;
+  }
+
+  /** Stage point → graph coordinates (the units positions and weights live in). */
+  toGraph(x: number, y: number): { x: number; y: number } {
+    const m = this.map;
+    return { x: (x - m.ox) / m.s + m.minX, y: (y - m.oy) / m.s + m.minY };
+  }
+
+  cellAt(x: number, y: number): number | null {
+    const g = this.input.graph.grid;
+    if (!g) return null;
+    const c = Math.floor((x - this.gridBox.ox) / this.gridBox.size);
+    const r = Math.floor((y - this.gridBox.oy) / this.gridBox.size);
+    return c < 0 || r < 0 || c >= g.cols || r >= g.rows ? null : r * g.cols + c;
+  }
+
   constructor(
     private readonly input: GraphInput,
     private readonly layers: readonly string[] = [],
@@ -41,6 +85,7 @@ export class GraphScene implements Scene<S> {
     const s = Math.min(sx, sy);
     const ox = (width - (maxX - minX) * s) / 2;
     const oy = (height - (maxY - minY) * s) / 2;
+    this.map = { s, ox, oy, minX, minY };
     return g.nodes.map((n) => ({ x: ox + (n.x - minX) * s, y: oy + (n.y - minY) * s }));
   }
 
@@ -48,6 +93,7 @@ export class GraphScene implements Scene<S> {
     const { graph, start, target } = this.input;
     const s = step.state;
     const pos = this.place(graph, width, height, 16);
+    this.positions = pos;
     const weighted = graph.edges.some((e) => e.weight !== 1);
     const radius = 7;
     const reverse = new Set(graph.edges.map((e, i) => (graph.directed && graph.edges.some((o) => o.from === e.to && o.to === e.from) ? i : -1)));
@@ -82,6 +128,7 @@ export class GraphScene implements Scene<S> {
     const size = Math.floor(Math.min((width - 16) / grid.cols, (height - 16) / grid.rows));
     const ox = Math.round((width - size * grid.cols) / 2);
     const oy = Math.round((height - size * grid.rows) / 2);
+    this.gridBox = { ox, oy, size };
     for (let i = 0; i < graph.nodes.length; i++) {
       const c = i % grid.cols;
       const row = Math.floor(i / grid.cols);

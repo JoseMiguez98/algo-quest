@@ -7,9 +7,8 @@ type Extra = Record<string, unknown>;
 const extra = (s: Step<unknown>) => (s.state as { extra: Extra }).extra;
 
 /** Data-structure views keyed by the layer names algorithms declare. */
-export function structureViews(layers: readonly string[], input: unknown): StructureView[] {
-  const g = (input as GraphInput | undefined)?.graph;
-  const label = (i: number) => g?.nodes[i]?.label ?? String(i);
+export function structureViews(layers: readonly string[], input: () => unknown): StructureView[] {
+  const label = (i: number) => (input() as GraphInput | undefined)?.graph?.nodes[i]?.label ?? String(i);
   const views: Record<string, StructureView> = {
     queue: { title: t('structure.queue'), kind: 'queue', items: (s) => ((extra(s).queue as number[]) ?? []).map(label) },
     stack: { title: t('structure.stack'), kind: 'stack', items: (s) => ((extra(s).stack as number[]) ?? []).map(label) },
