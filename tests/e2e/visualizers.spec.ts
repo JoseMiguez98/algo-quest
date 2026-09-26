@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 const IDS = [
-  'bubble-sort', 'selection-sort', 'insertion-sort', 'merge-sort', 'quick-sort', 'heap-sort', 'counting-sort', 'radix-sort', 'bucket-sort',
+  'bubble-sort', 'selection-sort', 'insertion-sort', 'shell-sort', 'merge-sort', 'quick-sort', 'heap-sort', 'counting-sort', 'radix-sort', 'bucket-sort',
   'bfs', 'dfs', 'bidirectional-bfs', 'dijkstra', 'a-star', 'greedy-best-first', 'bellman-ford', 'floyd-warshall', 'backtracking-maze',
 ];
 

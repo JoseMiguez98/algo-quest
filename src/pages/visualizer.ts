@@ -55,6 +55,7 @@ async function mount(root: HTMLElement): Promise<void> {
 
   const stageHost = h('div', { class: `stage${settings.get().scanlines ? ' is-scanlines' : ''}` });
   const stage = new Stage(stageHost, renderer, sceneFor(def, input));
+  stage.setLabel(`${content.name}: ${content.tagline}`);
   const narration = h('p', { class: 'narration__text', 'aria-live': 'polite' });
   const narrationBox = h('div', { class: 'narration is-waiting' }, narration, h('span', { class: 'narration__caret', 'aria-hidden': 'true' }, '▼'));
   const code = createCodePanel(def.pseudocode);

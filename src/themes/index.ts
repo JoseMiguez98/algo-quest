@@ -2,9 +2,10 @@ import { sound } from '../core/sound';
 import { settings } from '../core/settings';
 import type { StageRenderer, Theme } from './contract';
 import { megaDriveTheme } from './megadrive';
+import { modernTheme } from './modern';
 import { rpgTheme } from './rpg';
 
-const themes: Record<string, Theme> = { [megaDriveTheme.id]: megaDriveTheme, [rpgTheme.id]: rpgTheme };
+const themes: Record<string, Theme> = { [megaDriveTheme.id]: megaDriveTheme, [rpgTheme.id]: rpgTheme, [modernTheme.id]: modernTheme };
 
 export const allThemes = (): Theme[] => Object.values(themes);
 

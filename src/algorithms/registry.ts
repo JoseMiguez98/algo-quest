@@ -17,12 +17,14 @@ import mergeSort from './sorting/merge-sort';
 import quickSort from './sorting/quick-sort';
 import radixSort from './sorting/radix-sort';
 import selectionSort from './sorting/selection-sort';
+import shellSort from './sorting/shell-sort';
 
 /** Adding an algorithm = one folder + one line here. Order is the menu order (simple → advanced). */
 export const algorithms = [
   bubbleSort,
   selectionSort,
   insertionSort,
+  shellSort,
   mergeSort,
   quickSort,
   heapSort,

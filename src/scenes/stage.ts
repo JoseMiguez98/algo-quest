@@ -15,10 +15,16 @@ export class Stage<S = unknown> {
   ) {
     this.canvas.className = 'stage-canvas';
     this.canvas.setAttribute('role', 'img');
+    this.canvas.setAttribute('aria-label', host.dataset.label ?? 'Visualization');
     host.append(this.canvas);
     this.observer = new ResizeObserver(() => this.resize());
     this.observer.observe(host);
     this.resize();
+  }
+
+  /** Accessible name; the step-by-step narration lives in a separate live region. */
+  setLabel(label: string): void {
+    this.canvas.setAttribute('aria-label', label);
   }
 
   setRenderer(renderer: StageRenderer): void {
