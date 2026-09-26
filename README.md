@@ -1,7 +1,13 @@
 # Algo Quest
 
+[![CI](https://github.com/JoseMiguez98/algo-quest/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/JoseMiguez98/algo-quest/actions/workflows/ci.yml)
+[![Deploy](https://github.com/JoseMiguez98/algo-quest/actions/workflows/deploy.yml/badge.svg)](https://github.com/JoseMiguez98/algo-quest/actions/workflows/deploy.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 Visualizaciones educativas de algoritmos de ordenamiento y de grafos, con estética de consola de 16 bits,
 sonido sintetizado por código, pseudocódigo en vivo, modo playground y comparador.
+
+**Jugalo en https://josemiguez98.github.io/algo-quest/**. La versión en desarrollo (rama `dev`) está en [`/dev/`](https://josemiguez98.github.io/algo-quest/dev/).
 
 ```bash
 npm install
@@ -12,6 +18,7 @@ npm run build      # sitio estático en dist/
 ```
 
 Para publicar en una subcarpeta (por ejemplo GitHub Pages en `/algo-quest/`): `BASE_PATH=/algo-quest/ npm run build`.
+El deploy lo hace `.github/workflows/deploy.yml` en cada push a `main` o a `dev`.
 El resultado en `dist/` es 100 % estático: una página por algoritmo (`/sorting/quick-sort/`), la portada y `/compare/`.
 
 ## Cómo está organizado
@@ -31,38 +38,29 @@ La regla central: **los algoritmos solo emiten eventos semánticos** (`compare`,
 snapshot inmutable del estado. Nunca conocen colores, sonidos ni el DOM. Las escenas traducen el estado a primitivas
 (`bar`, `node`, `edge`…), y el theme decide cómo se ve y suena cada una.
 
-## Cómo agregar un algoritmo
+## Contribuir
 
-1. Creá `src/algorithms/<sorting|graph>/<id>/algorithm.ts`:
-   - Exportá `pseudocode` (líneas con `id`, `indent` y `text`).
-   - Exportá `run(input, options)` como generador. Usá `SortRecorder` o `GraphRecorder`: son los únicos que tocan los datos y los contadores.
-   - Cada `yield r.step(evento, idDeLínea, claveDeNarración, { params, vars, marks… })` es un paso de la animación.
-2. Escribí `algorithm.test.ts`. Usá `checkContract` del `testing.ts` de la categoría (valida el resultado, que el snapshot sea inmutable, las líneas de pseudocódigo y los contadores) y agregá invariantes propios contra una implementación de referencia independiente.
-3. Creá `content.es.ts` y `content.en.ts` (tipo `AlgorithmContent`). Deben incluir:
-   - Una plantilla de narración por cada clave que emita el algoritmo.
-   - Un resumen, los pasos y "cuándo usarlo".
-   - 2–3 referencias verificadas.
-4. Creá `index.ts` con `defineAlgorithm({...})`:
-   - Qué escena y capas usa, el input (rango y preset, o dataset de `src/data`) y las opciones.
-   - Complejidad, rasgos, contadores visibles, leyenda y duraciones relativas por evento.
-5. Agregá **una línea** en `src/algorithms/registry.ts`.
+Los aportes son bienvenidos: algoritmos, themes, traducciones, fixes y mejores explicaciones. Empezá por
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
-Eso es todo: el menú, la URL `/categoría/id/`, el HTML con su `<title>`, los controles, los hotkeys, los sonidos, el
-playground, el comparador y el test de cobertura de contenido (`src/algorithms/content.test.ts`) lo toman solos.
-Si el algoritmo necesita algo visual nuevo, escribí una capa en `src/scenes/layers/` y agregá su id a `layers`.
+- **Agregar un algoritmo:** una carpeta en `src/algorithms/<categoría>/<id>/` más una línea en `src/algorithms/registry.ts`. El checklist está en [`.claude/skills/add-algorithm`](.claude/skills/add-algorithm/SKILL.md).
+- **Agregar un theme:** tokens, CSS, renderer y sound pack en `src/themes/<id>/`. Ver [`.claude/skills/add-theme`](.claude/skills/add-theme/SKILL.md).
+- **Ramas y PRs:** las ramas salen de `dev` y los PRs van hacia `dev`. `main` es producción. Ver [`.claude/skills/contribute`](.claude/skills/contribute/SKILL.md).
 
-## Cómo agregar un theme
+Con [Claude Code](https://claude.com/claude-code), esas tres skills se cargan solas cuando pedís, por ejemplo, "agregá comb sort".
 
-Un theme (`src/themes/contract.ts`) tiene cuatro piezas:
+## Métricas
 
-1. **`tokens`**: colores (los de `RequiredColor` son obligatorios; el compilador avisa si falta alguno), los colores de cada estado visual y las tipografías. Todo se expone como variables CSS `--color-*` / `--state-*`.
-2. **`css`**: el skin de los componentes (`.ui-button`, `.ui-window`, `.cart`, …). La estructura está en `src/ui/layout.css` y no hace falta tocarla.
-3. **`createRenderer()`**: un `StageRenderer` con las primitivas de dibujo. Podés reutilizar `PixelRenderer` con un `PixelStyle` propio (como Mega Drive), o escribir uno nuevo (como `modern`, que dibuja vectorial y con antialias).
-4. **`sounds`**: un `SoundPack` que implementa los cues semánticos (`compare`, `swap`, `found`, `complete`, `ui-*`…) y, si querés, `music`.
-
-Registralo en `src/themes/index.ts` y ya aparece en el selector de estilo.
+El sitio publicado cuenta visitas y eventos de uso (play, paso atrás, edición, comparaciones) con
+[GoatCounter](https://www.goatcounter.com/). GoatCounter no usa cookies ni datos personales, y respeta *Do Not Track*.
+Solo se activa en producción cuando existe la variable `VITE_GOATCOUNTER`; ni en local ni en `/dev/` se envía nada.
+El código está en `src/core/analytics.ts`.
 
 ## Atajos de teclado
 
 `Espacio` play/pausa · `→`/`←` paso · `Home`/`End` inicio/fin · `R` reiniciar · `N` datos nuevos · `+`/`−` velocidad ·
 `M` sonido · `E` modo edición · `C` código · `I` info · `?` ayuda · `Esc` cerrar.
+
+## Licencia
+
+[MIT](LICENSE) © 2026 JoseMiguez98
