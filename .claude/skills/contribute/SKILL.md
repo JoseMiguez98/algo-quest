@@ -15,7 +15,7 @@ Algo Quest is built to be extended with AI agents. The project rules live in `AG
 | `dev` | Integration and preview (DEV badge, no analytics) | https://josemiguez98.github.io/algo-quest/dev/ |
 | `main` | Production | https://josemiguez98.github.io/algo-quest/ |
 
-Both branches are protected: changes land only through PRs with a green CI. `dev` is the default branch.
+Both branches are protected. Changes land only through PRs that have a green CI **and an approval from the maintainer, @JoseMiguez98**, who is the code owner of the whole repo (`.github/CODEOWNERS`). A new push to the PR requires a new approval. `dev` is the default branch.
 
 ## Branches
 
@@ -73,7 +73,7 @@ Before asking the contributor to open the PR, summarize what you verified by han
 - Target **`dev`**, except hotfixes.
 - Fill in `.github/pull_request_template.md`. For an algorithm, include the fidelity row and the references you checked.
 - Attach a screenshot or GIF for visual changes.
-- CI (`.github/workflows/ci.yml`) must be green. Feature PRs are **squash-merged**, and the branch is deleted on merge.
+- CI (`.github/workflows/ci.yml`) must be green and @JoseMiguez98 must approve. Feature PRs are **squash-merged**, and the branch is deleted on merge.
 
 ## Release: `dev` → `main` (maintainers)
 
