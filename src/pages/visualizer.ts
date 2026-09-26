@@ -10,7 +10,7 @@ import { t } from '../i18n';
 import { Stage } from '../scenes/stage';
 import { applyTheme, stageRenderer } from '../themes';
 import { defaultOptions, initialInput, sceneFor, traceFor } from '../core/session';
-import { algorithmIdFromLocation, homeUrl } from '../core/routes';
+import { algorithmIdFromLocation, compareUrl, homeUrl } from '../core/routes';
 import { createAppTools, onLanguageOrThemeChange } from '../ui/app-tools';
 import { setButtonIcon, ui } from '../ui/components';
 import { decodeState, encodeState } from '../playground/url-state';
@@ -75,6 +75,7 @@ async function mount(root: HTMLElement): Promise<void> {
   const editBtn = ui.button({ label: t('edit.start'), icon: 'edit', shortcut: 'E', onClick: () => toggleEdit() });
   const shareBtn = ui.button({ label: t('edit.share'), icon: 'link', iconOnly: true, onClick: () => share() });
   const editPanel = h('div', { class: 'edit-panel', hidden: true });
+  const compareLink = h('a', { class: 'ui-button', href: compareUrl(def.id) }, h('span', { class: 'ui-button__label' }, t('compare.open')));
   const pickers = h('div', { class: 'stage-toolbar__group' });
   for (const o of def.options ?? []) {
     const sel = h('select', { class: 'theme-select', 'aria-label': content.options?.[o.id] ?? o.id },
@@ -102,7 +103,7 @@ async function mount(root: HTMLElement): Promise<void> {
   }
   const toolbar = h('div', { class: 'stage-toolbar' },
     stats.live,
-    h('div', { class: 'stage-toolbar__group' }, pickers, def.input.kind === 'array' ? shuffleBtn : null, def.input.kind === 'array' ? presetBtn : null, editBtn, shareBtn),
+    h('div', { class: 'stage-toolbar__group' }, pickers, def.input.kind === 'array' ? shuffleBtn : null, def.input.kind === 'array' ? presetBtn : null, editBtn, shareBtn, compareLink),
   );
   const stageWindow = ui.window(null, toolbar, editPanel, stageHost, stats.strip, narrationBox, legend);
   stageWindow.classList.add('stage-window');

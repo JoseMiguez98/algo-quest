@@ -2,7 +2,7 @@ import '../ui/layout.css';
 import { algorithms } from '../algorithms/registry';
 import type { AlgorithmContent, AlgorithmDef, Category } from '../core/algorithm';
 import { Player } from '../core/player';
-import { algorithmUrl } from '../core/routes';
+import { algorithmUrl, compareUrl } from '../core/routes';
 import { initialInput, sceneFor, traceFor } from '../core/session';
 import { settings } from '../core/settings';
 import { sound } from '../core/sound';
@@ -77,7 +77,7 @@ async function mount(root: HTMLElement): Promise<void> {
   });
   const search = h('input', { type: 'search', class: 'search', placeholder: t('home.search'), 'aria-label': t('home.search') });
   search.addEventListener('input', () => { query = search.value.trim().toLowerCase(); apply(); });
-  filters.append(...filterBtns, search);
+  filters.append(...filterBtns, search, h('a', { class: 'ui-button', href: compareUrl() }, h('span', { class: 'ui-button__label' }, `${t('compare.vs')} · ${t('compare.open')}`)));
 
   const empty = h('div', { class: 'empty', hidden: true });
   const grid = h('div', { class: 'worlds' });

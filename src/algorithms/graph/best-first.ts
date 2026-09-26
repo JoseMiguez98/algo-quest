@@ -29,10 +29,10 @@ export type Mode = 'dijkstra' | 'a-star' | 'greedy';
  * Then h(u) = s·d(u,t) ≤ s·d(u,v) + s·d(v,t) ≤ w(u,v) + h(v): consistent on any positive-weight graph,
  * even when node coordinates are not in weight units. A weight > 1 deliberately breaks that (weighted A*).
  */
-export function heuristicFn(kind: Heuristic, graph: Graph, target: number | null, weight = 1): (u: number) => number {
+export function heuristicFn(kind: Heuristic, graph: Graph, target: number | null, weight = 1, scaled = true): (u: number) => number {
   if (kind === 'zero' || target === null) return () => 0;
   const base = kind === 'manhattan' ? manhattan : euclidean;
-  const s = heuristicScale(graph, base);
+  const s = scaled ? heuristicScale(graph, base) : 1;
   return (u) => round(weight * s * base(graph, u, target));
 }
 
@@ -66,7 +66,9 @@ export function* bestFirst(mode: Mode, { graph, start, target }: GraphInput, h: 
     x.open = pq.sorted().map((e) => ({ node: e.node, g: x.g[e.node]!, h: x.h[e.node]!, priority: e.key[0]!, stale: x.closed[e.node]! || e.key[0] !== priority(e.node) }));
   };
   const badge = (u: number) => {
-    r.badges[u] = mode === 'dijkstra' ? fmt(x.g[u]!) : mode === 'a-star' ? `${fmt(x.g[u]!)}+${x.h[u]}` : `h${x.h[u]}`;
+    const hv = x.h[u]!;
+    const h = Number.isInteger(hv) ? String(hv) : hv.toFixed(1);
+    r.badges[u] = mode === 'dijkstra' ? fmt(x.g[u]!) : mode === 'a-star' ? `${fmt(x.g[u]!)}+${h}` : `h${h}`;
   };
   x.g[start] = 0;
   pq.push(start, key(start));
