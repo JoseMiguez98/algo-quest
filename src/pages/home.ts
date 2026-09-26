@@ -1,6 +1,7 @@
 import '../ui/layout.css';
 import { algorithms } from '../algorithms/registry';
 import type { AlgorithmContent, AlgorithmDef, Category } from '../core/algorithm';
+import { track, trackPage } from '../core/analytics';
 import { Player } from '../core/player';
 import { algorithmUrl, compareUrl } from '../core/routes';
 import { initialInput, sceneFor, traceFor } from '../core/session';
@@ -29,6 +30,7 @@ async function mount(root: HTMLElement): Promise<void> {
   const lang = settings.get().lang;
   document.documentElement.lang = lang;
   document.title = `${t('app.name')} · ${t('app.tagline')}`;
+  trackPage('/');
   const entries: Entry[] = await Promise.all(
     algorithms.map(async (def) => {
       const world = WORLDS.indexOf(def.category) + 1;
@@ -195,11 +197,11 @@ function createCartridge(entry: Entry): HTMLAnchorElement {
     player = null;
     stage?.render(still, undefined, 1);
   };
-  el.addEventListener('mouseenter', play);
+  el.addEventListener('mouseenter', () => { play(); track('home/cart-hover'); });
   el.addEventListener('focus', play);
   el.addEventListener('mouseleave', () => document.activeElement !== el && stop());
   el.addEventListener('blur', stop);
-  el.addEventListener('click', () => sound.play('ui-select'));
+  el.addEventListener('click', () => { sound.play('ui-select'); track('home/cart-open'); });
   (el as unknown as { cleanup: () => void }).cleanup = () => { stop(); stage?.destroy(); };
   return el;
 }

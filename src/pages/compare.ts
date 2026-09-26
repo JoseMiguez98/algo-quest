@@ -4,6 +4,7 @@ import type { GraphInput, GraphState } from '../algorithms/graph/types';
 import { cheapestCost } from '../algorithms/graph/model';
 import { interpolate, type AlgorithmContent, type AlgorithmDef, type Category } from '../core/algorithm';
 import { mazeFor, mergedArraySpec, pairSteps, randomArray, sharedGraph, type CompareMode, type Pair } from '../core/compare';
+import { track, trackPage } from '../core/analytics';
 import { bindHotkeys } from '../core/hotkeys';
 import { Player } from '../core/player';
 import { algorithmUrl, homeUrl } from '../core/routes';
@@ -42,6 +43,7 @@ async function mount(root: HTMLElement): Promise<void> {
   const lang = settings.get().lang;
   document.documentElement.lang = lang;
   document.title = `${t('compare.title')} · ${t('app.name')}`;
+  trackPage('/compare/');
 
   const q = new URLSearchParams(location.search);
   let a = byId(q.get('a') ?? '') ?? byId(DEFAULTS.sorting[0])!;
@@ -165,6 +167,7 @@ async function mount(root: HTMLElement): Promise<void> {
     dataBtn.hidden = a.category === 'graph' && [a, b].some((d) => (d.input as { gridOnly?: boolean }).gridOnly);
     player.load(pairs as Step<unknown>[]);
     transport.load();
+    track(`compare/${a.id}-vs-${b.id}`);
   }
 
   function newData(): void {
@@ -242,7 +245,11 @@ async function mount(root: HTMLElement): Promise<void> {
 
   player.on('step', ({ direction }) => onStep(direction));
   player.on('frame', () => render());
-  player.on('status', () => transport.update());
+  player.on('status', (s) => {
+    if (s === 'playing') track('compare/play');
+    if (s === 'ended') track('compare/complete');
+    transport.update();
+  });
   player.on('speed', (s) => { settings.set({ speed: s }); transport.update(); });
 
   const unbind = bindHotkeys({

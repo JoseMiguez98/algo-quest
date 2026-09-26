@@ -6,13 +6,13 @@ import { setButtonIcon, ui } from '../components';
 import { clear, h } from '../dom';
 
 /** Transport laid out as a gamepad: d-pad steps/speed, face buttons play/reset. */
-export function createTransport(player: Player, steps: () => readonly Step<unknown>[]) {
+export function createTransport(player: Player, steps: () => readonly Step<unknown>[], onAction?: (action: 'step-back' | 'seek') => void) {
   const pad = (b: HTMLButtonElement, slot: string, glyph?: string) => {
     b.dataset.pad = slot;
     if (glyph) b.dataset.glyph = glyph;
     return b;
   };
-  const back = pad(ui.button({ label: t('transport.back'), icon: 'back', iconOnly: true, shortcut: '←', onClick: () => player.stepBack() }), 'left');
+  const back = pad(ui.button({ label: t('transport.back'), icon: 'back', iconOnly: true, shortcut: '←', onClick: () => { player.stepBack(); onAction?.('step-back'); } }), 'left');
   const forward = pad(ui.button({ label: t('transport.forward'), icon: 'forward', iconOnly: true, shortcut: '→', onClick: () => player.stepForward() }), 'right');
   const faster = pad(ui.button({ label: `${t('transport.speed')} +`, icon: 'plus', iconOnly: true, shortcut: '↑', onClick: () => player.faster() }), 'up');
   const slower = pad(ui.button({ label: `${t('transport.speed')} −`, icon: 'minus', iconOnly: true, shortcut: '↓', onClick: () => player.slower() }), 'down');
@@ -21,6 +21,7 @@ export function createTransport(player: Player, steps: () => readonly Step<unkno
 
   const range = h('input', { type: 'range', min: 0, max: 0, value: 0, step: 1, 'aria-label': t('transport.timeline') });
   range.addEventListener('input', () => player.seek(Number(range.value)));
+  range.addEventListener('change', () => onAction?.('seek'));
   const marks = h('div', { class: 'timeline__marks', 'aria-hidden': 'true' });
   const count = h('span', { class: 'transport__count' });
   const speedValue = h('span', { class: 'transport__speed-value', 'aria-live': 'polite' });
