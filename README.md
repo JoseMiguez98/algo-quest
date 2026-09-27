@@ -141,19 +141,18 @@ The code lives in `src/core/analytics.ts`.
 `Space` play/pause · `→`/`←` step · `Home`/`End` start/end · `R` restart · `N` new data · `+`/`−` speed ·
 `M` sound · `E` edit mode · `C` code · `I` info · `?` help · `Esc` close.
 
-## 💜 Contributors
+## 🚀 Leave your mark
 
-Thanks to everyone who adds algorithms, themes, translations and fixes.
+Algo Quest is young, and the first contributors will shape it. There's room for everyone:
 
-<a href="https://github.com/JoseMiguez98/algo-quest/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=JoseMiguez98/algo-quest" alt="Algo Quest contributors">
-</a>
+- **An algorithm.** Comb sort, Tim sort, Prim, Kruskal, topological sort… [Propose one](https://github.com/JoseMiguez98/algo-quest/issues/new?template=new-algorithm.yml) or build it with the `add-algorithm` skill.
+- **A theme.** Game Boy, SNES, a CRT terminal, high contrast… [Pitch it](https://github.com/JoseMiguez98/algo-quest/issues/new?template=new-theme.yml) and generate it in code with the `add-theme` skill.
+- **A fix or a better explanation.** Every narration, reference and translation counts.
 
-## ⭐ Star history
+With an AI agent and the skills in this repo, your first PR can be one afternoon away. Start with
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
-<a href="https://star-history.com/#JoseMiguez98/algo-quest&Date">
-  <img src="https://api.star-history.com/svg?repos=JoseMiguez98/algo-quest&type=Date" alt="Star history chart" width="600">
-</a>
+Not coding today? **A ⭐ takes one click**, helps more people find the project and tells us it's worth growing.
 
 ## 📄 License
 
