@@ -1,11 +1,9 @@
 <div align="center">
-
+  
 # 🎮 Algo Quest
-
 **A visualizer and playground for computer science algorithms, with the soul of a 16-bit console.**
 
 [![Play now](https://img.shields.io/badge/▶_play_now-josemiguez98.github.io-ffd800?style=for-the-badge&labelColor=000024)](https://josemiguez98.github.io/algo-quest/)
-
 [![GitHub stars](https://img.shields.io/github/stars/JoseMiguez98/algo-quest?style=flat&logo=github&label=stars)](https://github.com/JoseMiguez98/algo-quest/stargazers)
 [![CI](https://github.com/JoseMiguez98/algo-quest/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/JoseMiguez98/algo-quest/actions/workflows/ci.yml)
 [![Deploy](https://github.com/JoseMiguez98/algo-quest/actions/workflows/deploy.yml/badge.svg)](https://github.com/JoseMiguez98/algo-quest/actions/workflows/deploy.yml)
@@ -17,8 +15,7 @@
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](CONTRIBUTING.md)
 [![AI agents ready](https://img.shields.io/badge/AI_agents-ready-8a2be2)](AGENTS.md)
 
-<img src="docs/media/demo.gif" alt="Heap Sort animating step by step in the Mega Drive theme, with the pseudocode highlighted alongside" width="800">
-
+<video src="https://github.com/user-attachments/assets/2d6e2f93-1836-4ac2-8737-4a2fdcd43639" controls muted width="800"></video>
 **[Play](https://josemiguez98.github.io/algo-quest/)** · **[Contribute](CONTRIBUTING.md)** · **[Report a bug](https://github.com/JoseMiguez98/algo-quest/issues/new?template=bug.yml)** · **[Request an algorithm](https://github.com/JoseMiguez98/algo-quest/issues/new?template=new-algorithm.yml)**
 
 </div>
