@@ -89,6 +89,23 @@ Before asking the contributor to open the PR, summarize what you verified by han
 - Attach a screenshot or GIF for visual changes.
 - CI (`.github/workflows/ci.yml`) must be green and @JoseMiguez98 must approve. Feature PRs are **squash-merged**, and the branch is deleted on merge.
 
+## Out of date or in conflict
+
+Other PRs land in `dev` while yours is open. PRs must be up to date with `dev` before they merge, so sooner or later GitHub will say **"out of date"** or **"This branch has conflicts"**. Resolving it is the author's job, and an agent handles it well. Just ask: *"rebase my branch on `origin/dev` and resolve the conflicts following the gitflow skill"*.
+
+1. Rebase, don't merge. Never merge `dev` into your branch or use GitHub's web conflict editor: both add merge commits to your branch.
+   ```bash
+   git fetch origin && git rebase origin/dev
+   ```
+2. For each conflicted file (`git diff --name-only --diff-filter=U`), understand **both** intents before editing:
+   - your side: what your PR needs from that code;
+   - the `dev` side: what changed and why. Read the PR that landed: `git log --oneline origin/dev -- <file>`, then `gh pr view <number>`.
+3. Resolve so both intents survive. What `dev` removed or changed on purpose stays that way, and your change is re-applied on top of it. Never take "ours" or "theirs" wholesale without reading.
+4. If the intents contradict (for example, `dev` deleted what your PR extends), stop and ask the contributor or comment on the PR. Don't guess.
+5. `git add <file>` and `git rebase --continue`, then run the four checks (`typecheck`, `test`, `e2e`, `build`). A clean rebase can still break the build.
+6. With the contributor's OK, `git push --force-with-lease`. Only ever on your own branch.
+7. Leave a short PR comment saying what conflicted and how you resolved it. The new push asks for a new approval, so this helps the reviewer.
+
 ## Release (maintainer only)
 
 1. Check that `https://josemiguez98.github.io/algo-quest/dev/` looks right.
