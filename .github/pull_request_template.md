@@ -13,7 +13,7 @@
 
 ## Checklist
 
-- [ ] The PR targets `dev` (or `main` only for a hotfix)
+- [ ] The PR targets `dev`
 - [ ] `npm run typecheck && npm test && npm run e2e && npm run build` pass
 - [ ] Tested by hand on desktop and mobile (~390 px)
 - [ ] Screenshot or GIF if something visual changes

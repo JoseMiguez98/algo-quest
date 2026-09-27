@@ -158,7 +158,7 @@ The details are in [`.claude/skills/gitflow/SKILL.md`](.claude/skills/gitflow/SK
 
 **Your branch:**
 - Starts from `dev` with a prefix: `algo/<id>`, `theme/<id>`, `feat/…`, `fix/…`, `docs/…` or `chore/…`.
-- The PR goes into `dev`.
+- The PR goes into `dev`. Only the maintainer releases to `main`, through `release/*` and `hotfix/*` branches.
 
 **Commits:**
 - Use [Conventional Commits](https://www.conventionalcommits.org/) with a short subject, for example `feat(algo): add comb sort`.
