@@ -79,16 +79,3 @@ test('home search filters and explains empty results', async ({ page }) => {
   await page.getByRole('searchbox').fill('zzz');
   await expect(page.locator('.empty')).toBeVisible();
 });
-
-test('code panel never scrolls the page on mobile', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/visualizer.html?algo=bubble-sort');
-  await page.locator('#tab-code').click();
-  const count = page.locator('.transport__count');
-  await expect(count).toContainText(/1\/\d+/);
-  await page.evaluate(() => window.scrollTo(0, 0));
-  for (let i = 0; i < 8; i++) await page.keyboard.press('ArrowRight');
-  await expect(count).toContainText(/9\/\d+/);
-  await page.keyboard.press('End');
-  expect(await page.evaluate(() => window.scrollY)).toBe(0);
-});

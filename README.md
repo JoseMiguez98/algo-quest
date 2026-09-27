@@ -114,6 +114,7 @@ agent needs, so every contributor follows the same steps, the same rules and the
 | [`AGENTS.md`](AGENTS.md) | Project rules for any agent (Claude Code, Cursor, Codex, Copilot…) |
 | [`.claude/skills/add-algorithm`](.claude/skills/add-algorithm/SKILL.md) | Add an algorithm or a category: core, tests against a reference, ES/EN content and registration |
 | [`.claude/skills/add-theme`](.claude/skills/add-theme/SKILL.md) | Create a theme: tokens, CSS, renderer, sounds and accessibility audit |
+| [`.claude/skills/write-tests`](.claude/skills/write-tests/SKILL.md) | When a test belongs in the suite and when it is just noise |
 | [`.claude/skills/gitflow`](.claude/skills/gitflow/SKILL.md) | Branches, commits, PRs, releases and hotfixes |
 
 With [Claude Code](https://claude.com/claude-code) the skills kick in on their own: ask it to "add comb sort" or

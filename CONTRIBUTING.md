@@ -23,6 +23,7 @@ This repo is designed for you to contribute **side by side with an AI agent**. T
 | [`AGENTS.md`](AGENTS.md) | The project rules. Read by Claude Code (via `CLAUDE.md`), Cursor, Codex, Copilot and others |
 | [`.claude/skills/add-algorithm`](.claude/skills/add-algorithm/SKILL.md) | The step-by-step guide to adding an algorithm or a category |
 | [`.claude/skills/add-theme`](.claude/skills/add-theme/SKILL.md) | The step-by-step guide to creating a theme |
+| [`.claude/skills/write-tests`](.claude/skills/write-tests/SKILL.md) | When to add a test, and when not to |
 | [`.claude/skills/gitflow`](.claude/skills/gitflow/SKILL.md) | Branches, commits, PRs, releases and hotfixes |
 
 **How to work:**
