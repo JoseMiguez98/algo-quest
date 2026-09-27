@@ -20,6 +20,7 @@ import { createArrayEditor } from '../playground/array-editor';
 import { createGraphEditor } from '../playground/graph-editor';
 import type { GraphInput } from '../algorithms/graph/types';
 import { clear, h } from '../ui/dom';
+import { mountDesktopHint } from '../ui/desktop-hint';
 import { createSiteFooter } from '../ui/site-footer';
 import { icon } from '../ui/icons';
 import { createCodePanel } from '../ui/panels/code-panel';
@@ -143,6 +144,7 @@ async function mount(root: HTMLElement): Promise<void> {
   const app = h('div', { class: 'app' }, bar, stageWindow, transport.el, side);
   clear(root);
   root.append(app, createSiteFooter(), help.el);
+  mountDesktopHint(root);
   selectTab(settings.get().panel);
 
   function tabButton(id: Tab, label: string): HTMLButtonElement {

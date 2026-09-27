@@ -23,7 +23,8 @@ This repo is designed for you to contribute **side by side with an AI agent**. T
 | [`AGENTS.md`](AGENTS.md) | The project rules. Read by Claude Code (via `CLAUDE.md`), Cursor, Codex, Copilot and others |
 | [`.claude/skills/add-algorithm`](.claude/skills/add-algorithm/SKILL.md) | The step-by-step guide to adding an algorithm or a category |
 | [`.claude/skills/add-theme`](.claude/skills/add-theme/SKILL.md) | The step-by-step guide to creating a theme |
-| [`.claude/skills/contribute`](.claude/skills/contribute/SKILL.md) | Branches, commits, PRs, releases and hotfixes |
+| [`.claude/skills/write-tests`](.claude/skills/write-tests/SKILL.md) | When to add a test, and when not to |
+| [`.claude/skills/gitflow`](.claude/skills/gitflow/SKILL.md) | Branches, commits, PRs, releases and hotfixes |
 
 **How to work:**
 
@@ -146,7 +147,7 @@ It must pass the accessibility audit (`tests/e2e/a11y.spec.ts`) with no violatio
 
 ## 🌿 Branches, commits and PRs
 
-The details are in [`.claude/skills/contribute/SKILL.md`](.claude/skills/contribute/SKILL.md).
+The details are in [`.claude/skills/gitflow/SKILL.md`](.claude/skills/gitflow/SKILL.md).
 
 **Branches and environments:**
 
@@ -157,7 +158,8 @@ The details are in [`.claude/skills/contribute/SKILL.md`](.claude/skills/contrib
 
 **Your branch:**
 - Starts from `dev` with a prefix: `algo/<id>`, `theme/<id>`, `feat/…`, `fix/…`, `docs/…` or `chore/…`.
-- The PR goes into `dev`.
+- The PR goes into `dev`. Only the maintainer releases to `main`, through `release/*` and `hotfix/*` branches.
+- If the PR falls behind `dev` or has conflicts, resolving them is on you, and your agent can do it: ask it to rebase on `origin/dev` following the gitflow skill ("Out of date or in conflict").
 
 **Commits:**
 - Use [Conventional Commits](https://www.conventionalcommits.org/) with a short subject, for example `feat(algo): add comb sort`.

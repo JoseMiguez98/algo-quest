@@ -1,13 +1,13 @@
 import { expect, test } from '@playwright/test';
 import { discoverPages } from '../../build/pages-plugin';
 
-const IDS = discoverPages(process.cwd()).map((p) => p.id);
+const PAGES = discoverPages(process.cwd());
 
-for (const id of IDS) {
+for (const { category, id } of PAGES) {
   test(`${id}: runs end to end with the standard controls`, async ({ page }) => {
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(String(e)));
-    await page.goto(`/visualizer.html?algo=${id}`);
+    await page.goto(`/${category}/${id}/`);
     const count = page.locator('.transport__count');
     await expect(count).toContainText(/1\/\d+/);
     const narration = page.locator('.narration__text');
@@ -62,7 +62,7 @@ test('options re-run the algorithm', async ({ page }) => {
 test('home lists every algorithm and opens one from the keyboard', async ({ page }) => {
   await page.goto('/');
   const carts = page.locator('.cart');
-  await expect(carts).toHaveCount(IDS.length);
+  await expect(carts).toHaveCount(PAGES.length);
   await page.getByRole('button', { name: /START/ }).click();
   await expect(carts.first()).toBeFocused();
   await page.keyboard.press('ArrowRight');
@@ -78,4 +78,16 @@ test('home search filters and explains empty results', async ({ page }) => {
   await expect(page.locator('.cart:visible')).toHaveCount(1);
   await page.getByRole('searchbox').fill('zzz');
   await expect(page.locator('.empty')).toBeVisible();
+});
+
+test('mobile visitors get a dismissible desktop tip', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  const hint = page.getByRole('region', { name: 'Tip' });
+  await expect(hint).toContainText('big screen');
+  await hint.getByRole('button', { name: 'Dismiss tip' }).click();
+  await expect(hint).toHaveCount(0);
+  await page.goto('/sorting/bubble-sort/');
+  await expect(page.locator('.transport__count')).toBeVisible();
+  await expect(hint).toHaveCount(0);
 });

@@ -1,11 +1,9 @@
 <div align="center">
-
+  
 # 🎮 Algo Quest
-
 **A visualizer and playground for computer science algorithms, with the soul of a 16-bit console.**
 
 [![Play now](https://img.shields.io/badge/▶_play_now-josemiguez98.github.io-ffd800?style=for-the-badge&labelColor=000024)](https://josemiguez98.github.io/algo-quest/)
-
 [![GitHub stars](https://img.shields.io/github/stars/JoseMiguez98/algo-quest?style=flat&logo=github&label=stars)](https://github.com/JoseMiguez98/algo-quest/stargazers)
 [![CI](https://github.com/JoseMiguez98/algo-quest/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/JoseMiguez98/algo-quest/actions/workflows/ci.yml)
 [![Deploy](https://github.com/JoseMiguez98/algo-quest/actions/workflows/deploy.yml/badge.svg)](https://github.com/JoseMiguez98/algo-quest/actions/workflows/deploy.yml)
@@ -17,8 +15,7 @@
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](CONTRIBUTING.md)
 [![AI agents ready](https://img.shields.io/badge/AI_agents-ready-8a2be2)](AGENTS.md)
 
-<img src="docs/media/demo.gif" alt="Heap Sort animating step by step in the Mega Drive theme, with the pseudocode highlighted alongside" width="800">
-
+<video src="https://github.com/user-attachments/assets/2d6e2f93-1836-4ac2-8737-4a2fdcd43639" controls muted width="800"></video>
 **[Play](https://josemiguez98.github.io/algo-quest/)** · **[Contribute](CONTRIBUTING.md)** · **[Report a bug](https://github.com/JoseMiguez98/algo-quest/issues/new?template=bug.yml)** · **[Request an algorithm](https://github.com/JoseMiguez98/algo-quest/issues/new?template=new-algorithm.yml)**
 
 </div>
@@ -117,7 +114,8 @@ agent needs, so every contributor follows the same steps, the same rules and the
 | [`AGENTS.md`](AGENTS.md) | Project rules for any agent (Claude Code, Cursor, Codex, Copilot…) |
 | [`.claude/skills/add-algorithm`](.claude/skills/add-algorithm/SKILL.md) | Add an algorithm or a category: core, tests against a reference, ES/EN content and registration |
 | [`.claude/skills/add-theme`](.claude/skills/add-theme/SKILL.md) | Create a theme: tokens, CSS, renderer, sounds and accessibility audit |
-| [`.claude/skills/contribute`](.claude/skills/contribute/SKILL.md) | Branches, commits, PRs, releases and hotfixes |
+| [`.claude/skills/write-tests`](.claude/skills/write-tests/SKILL.md) | When a test belongs in the suite and when it is just noise |
+| [`.claude/skills/gitflow`](.claude/skills/gitflow/SKILL.md) | Branches, commits, PRs, releases and hotfixes |
 
 With [Claude Code](https://claude.com/claude-code) the skills kick in on their own: ask it to "add comb sort" or
 "make me a Game Boy theme" and it follows the full checklist. With another agent, point it to `AGENTS.md`. If you'd
@@ -143,19 +141,18 @@ The code lives in `src/core/analytics.ts`.
 `Space` play/pause · `→`/`←` step · `Home`/`End` start/end · `R` restart · `N` new data · `+`/`−` speed ·
 `M` sound · `E` edit mode · `C` code · `I` info · `?` help · `Esc` close.
 
-## 💜 Contributors
+## 🚀 Leave your mark
 
-Thanks to everyone who adds algorithms, themes, translations and fixes.
+Algo Quest is young, and the first contributors will shape it. There's room for everyone:
 
-<a href="https://github.com/JoseMiguez98/algo-quest/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=JoseMiguez98/algo-quest" alt="Algo Quest contributors">
-</a>
+- **An algorithm.** Comb sort, Tim sort, Prim, Kruskal, topological sort… [Propose one](https://github.com/JoseMiguez98/algo-quest/issues/new?template=new-algorithm.yml) or build it with the `add-algorithm` skill.
+- **A theme.** Game Boy, SNES, a CRT terminal, high contrast… [Pitch it](https://github.com/JoseMiguez98/algo-quest/issues/new?template=new-theme.yml) and generate it in code with the `add-theme` skill.
+- **A fix or a better explanation.** Every narration, reference and translation counts.
 
-## ⭐ Star history
+With an AI agent and the skills in this repo, your first PR can be one afternoon away. Start with
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
-<a href="https://star-history.com/#JoseMiguez98/algo-quest&Date">
-  <img src="https://api.star-history.com/svg?repos=JoseMiguez98/algo-quest&type=Date" alt="Star history chart" width="600">
-</a>
+Not coding today? **A ⭐ takes one click**, helps more people find the project and tells us it's worth growing.
 
 ## 📄 License
 

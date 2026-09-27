@@ -6,7 +6,8 @@ Algo Quest is a visualizer and playground for computer science algorithms, and i
 |---|---|
 | Add an algorithm or a category | `.claude/skills/add-algorithm/SKILL.md` |
 | Create a theme | `.claude/skills/add-theme/SKILL.md` |
-| Branch, commit, open a PR, release | `.claude/skills/contribute/SKILL.md` |
+| Add, change or remove a test; fix a bug | `.claude/skills/write-tests/SKILL.md` |
+| Branch, commit, open a PR, release | `.claude/skills/gitflow/SKILL.md` |
 
 ## Non-negotiable rules
 
@@ -14,6 +15,7 @@ Algo Quest is a visualizer and playground for computer science algorithms, and i
    - Algorithm cores are property-tested against an independent reference implementation.
    - Never weaken a test to make it pass; fix the algorithm.
    - Every claimed trait (stable, optimal…) has a test.
+   - Tests only for new algorithms, features and themes (see `write-tests`). Bug fixes are verified, not kept as regression tests.
 2. **Algorithms emit semantic events only.** Cores yield immutable snapshots through `SortRecorder` / `GraphRecorder`. They never touch colors, sounds or the DOM.
 3. **Zero runtime dependencies.**
    - `package.json` has no `dependencies`; don't add any.
