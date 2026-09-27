@@ -1,6 +1,6 @@
 ---
 name: gitflow
-description: Algo Quest Gitflow — feature branches off dev, the dev/main environments, commits, PR checklist, releases and hotfixes. Use whenever creating a branch, committing, opening a PR, releasing dev to main or fixing production.
+description: Algo Quest Gitflow — feature branches off dev, the dev/main environments, commits, PRs, releases and hotfixes. Use whenever creating a branch, committing, opening a PR, releasing dev to main or fixing production.
 allowed-tools: Read, Bash(git status*), Bash(git diff*), Bash(git log*), Bash(git branch*), Bash(git switch*), Bash(git checkout*), Bash(git add*), Bash(git commit*), Bash(git fetch*), Bash(git rebase*), Bash(npm test*), Bash(npm run *), Bash(gh pr view*), Bash(gh pr checks*), Bash(gh run *)
 ---
 
@@ -85,7 +85,8 @@ Before asking the contributor to open the PR, summarize what you verified by han
 ## Pull requests
 
 - Target **`dev`**. Never `main`.
-- Fill in `.github/pull_request_template.md`. For an algorithm, include the fidelity row and the references you checked.
+- **Title** in Conventional Commits, like a commit subject (`feat(algo): add comb sort`, `fix(ui): …`). It becomes the squashed commit on `dev`, so the type must be right.
+- **Description:** one or two sentences on what changed and why, and the issue it closes, if any (`.github/pull_request_template.md`). No checklists: the checks above and CI cover them.
 - Attach a screenshot or GIF for visual changes.
 - CI (`.github/workflows/ci.yml`) must be green and @JoseMiguez98 must approve. Feature PRs are **squash-merged**, and the branch is deleted on merge.
 
