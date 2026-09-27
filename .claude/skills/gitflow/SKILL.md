@@ -15,8 +15,10 @@ The repo follows a lightweight Gitflow:
 | Develop | `dev`, the default branch |
 | Production | `main` |
 | Feature branches | `algo/…`, `theme/…`, `feat/…`, `fix/…`, `docs/…`, `chore/…` off `dev`, squash-merged back into `dev` |
-| Release | a PR from `dev` into `main`, merged with a merge commit |
-| Hotfix | `fix/…` off `main`, then `main` merged back into `dev` |
+| Release | `release/<yyyy-mm-dd>` off `dev`, merged into `main` with a merge commit, then `main` synced back into `dev` |
+| Hotfix | `hotfix/<slug>` off `main`, merged into `main` with a merge commit, then `main` synced back into `dev` |
+
+Resulting history: `dev` has one squashed commit per PR, `main` has one merge commit per release or hotfix, and `dev` always contains `main`.
 
 ## Environments
 
@@ -25,7 +27,9 @@ The repo follows a lightweight Gitflow:
 | `dev` | Integration and preview (DEV badge, no analytics) | https://josemiguez98.github.io/algo-quest/dev/ |
 | `main` | Production | https://josemiguez98.github.io/algo-quest/ |
 
-Both branches are protected. Changes land only through PRs that have a green CI **and an approval from the maintainer, @JoseMiguez98**, who is the code owner of the whole repo (`.github/CODEOWNERS`). A new push to the PR requires a new approval. `dev` is the default branch.
+Both branches are protected. Changes land only through PRs that have a green CI (`test` job), are up to date with their base **and have an approval from the maintainer, @JoseMiguez98**, who is the code owner of the whole repo (`.github/CODEOWNERS`). A new push to the PR requires a new approval. `dev` is the default branch.
+
+**`main` belongs to the maintainer.** Only @JoseMiguez98 creates `release/*` and `hotfix/*` branches and opens or merges PRs into `main`. Contributors and agents always target `dev`. Found a production bug? Open an issue or a `fix/…` PR into `dev`, and the maintainer decides whether it ships as a hotfix.
 
 ## Branches
 
@@ -80,22 +84,46 @@ Before asking the contributor to open the PR, summarize what you verified by han
 
 ## Pull requests
 
-- Target **`dev`**, except hotfixes.
+- Target **`dev`**. Never `main`.
 - Fill in `.github/pull_request_template.md`. For an algorithm, include the fidelity row and the references you checked.
 - Attach a screenshot or GIF for visual changes.
 - CI (`.github/workflows/ci.yml`) must be green and @JoseMiguez98 must approve. Feature PRs are **squash-merged**, and the branch is deleted on merge.
 
-## Release: `dev` → `main` (maintainers)
+## Release (maintainer only)
 
 1. Check that `https://josemiguez98.github.io/algo-quest/dev/` looks right.
-2. Open a PR from `dev` into `main` titled `release: <yyyy-mm-dd>`, listing the merged PRs.
-3. Merge with a **merge commit** (not squash), so `dev` and `main` share history.
-4. The deploy workflow publishes both environments.
+2. Cut the release from the latest `dev`:
+   ```bash
+   git fetch origin && git switch -c release/<yyyy-mm-dd> origin/dev && git push -u origin HEAD
+   ```
+3. Open a PR from `release/<yyyy-mm-dd>` into `main` titled `release: <yyyy-mm-dd>`. List what ships, one squashed PR per line:
+   ```bash
+   git log --first-parent --no-merges --format='- %s' origin/main..HEAD
+   ```
+   No commits go straight onto the release branch. If it needs a fix, merge the fix into `dev`, delete the branch and cut it again.
+4. With CI green, merge with a **merge commit**. The release branch is deleted on merge, and the deploy workflow publishes both environments.
+5. Sync `main` back into `dev` (see below).
 
-## Hotfix (maintainers)
+## Hotfix (maintainer only)
 
-1. `git switch -c fix/<slug> origin/main`, fix it and open the PR into `main`.
-2. After merging, bring `main` back into `dev` with a PR from `main` into `dev` (merge commit).
+1. `git fetch origin && git switch -c hotfix/<slug> origin/main`, fix it and open the PR into `main` titled `fix: …`.
+2. Verify the fix by hand or with a throwaway test (see `write-tests`), and merge with a **merge commit** once CI is green.
+3. Sync `main` back into `dev`.
+
+## Sync `main` back into `dev` (maintainer only)
+
+After every release or hotfix, so `dev` always contains `main` and the next release PR is up to date:
+
+```bash
+git fetch origin && git switch dev && git merge --ff-only origin/dev
+git merge --ff-only origin/main || git merge --no-edit origin/main
+git push origin dev
+```
+
+- If nothing landed in `dev` since the release branch was cut, this is a fast-forward and adds no commit.
+- Otherwise it adds one `Merge remote-tracking branch 'origin/main' into dev` commit. For a release, that merge brings no code changes, because the release came from `dev`.
+- After a hotfix the merge does bring code. Resolve any conflict locally and run the four checks before pushing. CI also runs on the push to `dev`.
+- This is the only direct push to a protected branch, and only the maintainer can make it. It never needs `--force`.
 
 ## Safety
 
