@@ -14,6 +14,7 @@ import { applyTheme, stageRenderer } from '../themes';
 import { createAppTools, onLanguageOrThemeChange } from '../ui/app-tools';
 import { ui } from '../ui/components';
 import { h } from '../ui/dom';
+import { mountDesktopHint } from '../ui/desktop-hint';
 import { createSiteFooter } from '../ui/site-footer';
 
 type Def = AlgorithmDef<never>;
@@ -127,6 +128,7 @@ async function mount(root: HTMLElement): Promise<void> {
 
   const footer = h('footer', { class: 'home-footer' }, h('p', {}, t('home.footer')), h('p', { class: 'home-footer__count' }, t('home.count', { n: entries.length })));
   root.replaceChildren(h('div', { class: 'home' }, bar, hero, ui.window(null, filters, grid, empty), footer, createSiteFooter()));
+  mountDesktopHint(root);
   for (const w of root.querySelectorAll('.home > .ui-window')) w.classList.add('select-window');
 
   const unlock = () => sound.unlock();

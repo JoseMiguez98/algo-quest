@@ -12,6 +12,7 @@ export interface Settings {
   panel: 'code' | 'info' | 'stats';
   scanlines: boolean;
   music: boolean;
+  desktopHintDismissed: boolean;
 }
 
 const KEY = 'algo-visualizer:settings';
@@ -25,6 +26,7 @@ const defaults = (): Settings => ({
   panel: 'code',
   scanlines: true,
   music: false,
+  desktopHintDismissed: false,
 });
 
 function load(): Settings {

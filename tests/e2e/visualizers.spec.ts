@@ -79,3 +79,15 @@ test('home search filters and explains empty results', async ({ page }) => {
   await page.getByRole('searchbox').fill('zzz');
   await expect(page.locator('.empty')).toBeVisible();
 });
+
+test('mobile visitors get a dismissible desktop tip', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  const hint = page.getByRole('region', { name: 'Tip' });
+  await expect(hint).toContainText('big screen');
+  await hint.getByRole('button', { name: 'Dismiss tip' }).click();
+  await expect(hint).toHaveCount(0);
+  await page.goto('/sorting/bubble-sort/');
+  await expect(page.locator('.transport__count')).toBeVisible();
+  await expect(hint).toHaveCount(0);
+});
