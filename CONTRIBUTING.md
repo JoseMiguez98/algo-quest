@@ -159,6 +159,7 @@ The details are in [`.claude/skills/gitflow/SKILL.md`](.claude/skills/gitflow/SK
 **Your branch:**
 - Starts from `dev` with a prefix: `algo/<id>`, `theme/<id>`, `feat/…`, `fix/…`, `docs/…` or `chore/…`.
 - The PR goes into `dev`. Only the maintainer releases to `main`, through `release/*` and `hotfix/*` branches.
+- If the PR falls behind `dev` or has conflicts, resolving them is on you, and your agent can do it: ask it to rebase on `origin/dev` following the gitflow skill ("Out of date or in conflict").
 
 **Commits:**
 - Use [Conventional Commits](https://www.conventionalcommits.org/) with a short subject, for example `feat(algo): add comb sort`.
