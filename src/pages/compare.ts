@@ -18,6 +18,7 @@ import { applyTheme, stageRenderer } from '../themes';
 import { createAppTools, onLanguageOrThemeChange } from '../ui/app-tools';
 import { ui } from '../ui/components';
 import { clear, h } from '../ui/dom';
+import { mountDesktopHint } from '../ui/desktop-hint';
 import { createSiteFooter } from '../ui/site-footer';
 import { icon } from '../ui/icons';
 import { createHelp } from '../ui/panels/help';
@@ -109,6 +110,7 @@ async function mount(root: HTMLElement): Promise<void> {
   const app = h('div', { class: 'compare' }, bar, setup, arena, transport.el, results);
   clear(root);
   root.append(app, createSiteFooter(), help.el);
+  mountDesktopHint(root);
 
   let fighters: Fighter[] = [];
 

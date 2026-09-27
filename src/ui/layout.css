@@ -122,6 +122,9 @@ img, svg, canvas { display: block; }
 .empty p { margin: 0; }
 .home-footer { display: flex; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2); }
 .home-footer p { margin: 0; }
+.desktop-hint { display: flex; flex-direction: row; align-items: center; gap: var(--space-2); max-width: 1480px; margin: var(--space-2) var(--space-2) 0; padding-block: var(--space-2); }
+.desktop-hint__art { flex: none; width: 40px; height: 32px; }
+.desktop-hint__text { flex: 1 1 auto; margin: 0; font-size: 0.875em; }
 .site-footer { max-width: 1480px; margin: 0 auto; padding: var(--space-4) var(--space-3) calc(var(--space-4) * 2); display: flex; flex-direction: column; align-items: center; gap: var(--space-3); text-align: center; }
 .site-footer p { margin: 0; }
 .site-footer__links { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--space-2); }
