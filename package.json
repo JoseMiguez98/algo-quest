@@ -29,6 +29,6 @@
     "fast-check": "^4.10.2",
     "typescript": "^7.0.2",
     "vite": "^6.4.3",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.12"
   }
 }
